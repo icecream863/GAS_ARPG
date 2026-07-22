@@ -49,6 +49,17 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Damage")
 	float DebuffFrequency = 0.f;
 
+	// 技能只定义冲量强度；实际方向要等 Projectile 命中时才能确定。
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Damage")
+	float DeathImpulseMagnitude = 60.f;
+
+	// 非致死命中时由 CharacterMovement 使用的发射速度，而不是布娃娃冲量。
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Damage")
+	float KnockbackForceMagnitude = 1000.f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Damage", meta = (ClampMin = "0.0", ClampMax = "100.0"))
+	float KnockbackChance = 0.f;
+
 	UFUNCTION(BlueprintPure, Category = "Damage")
 	FDamageEffectParams MakeDamageEffectParamsFromClassDefaults(AActor* TargetActor = nullptr) const;
 	

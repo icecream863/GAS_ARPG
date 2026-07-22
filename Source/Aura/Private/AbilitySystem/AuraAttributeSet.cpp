@@ -187,12 +187,21 @@ void UAuraAttributeSet::HandleIncomingDamage(const FEffectProperties& Props)
 	{
 		if (ICombatInterface* CombatInterface = Cast<ICombatInterface>(Props.TargetAvatarActor))
 		{
-			CombatInterface->Die();
+			const FVector DeathImpulse = UAuraAbilitySystemLibrary::GetDeathImpulse(Props.EffectContextHandle);
+			CombatInterface->Die(DeathImpulse);
 		}
 		SendXPEvent(Props);
 	}
 	else
 	{
+		const FVector KnockbackForce = UAuraAbilitySystemLibrary::GetKnockbackForce(Props.EffectContextHandle);
+		if (Props.TargetCharacter && !KnockbackForce.IsNearlyZero(1.f))
+		{
+			// 非致死目标仍由 CharacterMovement 驱动，不能像死亡一样切换为布娃娃。
+			// Context 为零向量时代表击退概率失败，因此不会进入这里。
+			Props.TargetCharacter->LaunchCharacter(KnockbackForce, true, true);
+		}
+
 		FGameplayTagContainer TagContainer;
 		TagContainer.AddTag(FAuraGameplayTags::Get().Effect_HitReact);
 		Props.TargetASC->TryActivateAbilitiesByTag(TagContainer);
@@ -224,8 +233,7 @@ void UAuraAttributeSet::HandleIncomingXP(const FEffectProperties& Props)
 
 	const int32 CurrentXP = IPlayerInterface::Execute_GetXP(Props.SourceCharacter);
 	const int32 CurrentLevel = ICombatInterface::Execute_GetPlayerLevel(Props.SourceCharacter);
-	const int32 NewLevel =
-		IPlayerInterface::Execute_FindLevelForXP(Props.SourceCharacter, CurrentXP + LocalIncomingXP);
+	const int32 NewLevel = IPlayerInterface::Execute_FindLevelForXP(Props.SourceCharacter, CurrentXP + LocalIncomingXP);
 	const int32 NumLevelUps = NewLevel - CurrentLevel;
 
 	if (NumLevelUps > 0)

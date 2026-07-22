@@ -7,8 +7,10 @@
 #include "AbilitySystemComponent.h"
 #include "AuraAbilityTypes.h"
 #include "AuraGameplayTags.h"
+#include "CollisionShape.h"
 #include "Engine/OverlapResult.h"
 #include "GameplayEffectTypes.h"
+#include "Engine/Engine.h"
 #include "Game/AuraGameModeBase.h"
 #include "Interaction/CombatInterface.h"
 #include "Kismet/GameplayStatics.h"
@@ -261,6 +263,26 @@ FGameplayTag UAuraAbilitySystemLibrary::GetDamageType(const FGameplayEffectConte
 	return FGameplayTag();
 }
 
+FVector UAuraAbilitySystemLibrary::GetDeathImpulse(const FGameplayEffectContextHandle& EffectContextHandle)
+{
+	if (const FAuraGameplayEffectContext* AuraEffectContext =
+		static_cast<const FAuraGameplayEffectContext*>(EffectContextHandle.Get()))
+	{
+		return AuraEffectContext->GetDeathImpulse();
+	}
+	return FVector::ZeroVector;
+}
+
+FVector UAuraAbilitySystemLibrary::GetKnockbackForce(const FGameplayEffectContextHandle& EffectContextHandle)
+{
+	if (const FAuraGameplayEffectContext* AuraEffectContext =
+		static_cast<const FAuraGameplayEffectContext*>(EffectContextHandle.Get()))
+	{
+		return AuraEffectContext->GetKnockbackForce();
+	}
+	return FVector::ZeroVector;
+}
+
 void UAuraAbilitySystemLibrary::SetBlockedHit(FGameplayEffectContextHandle& EffectContextHandle, bool bIsBlockedHit)
 {
 	if ( FAuraGameplayEffectContext* AuraEffectContext = static_cast< FAuraGameplayEffectContext*>(EffectContextHandle.Get()))
@@ -327,6 +349,26 @@ void UAuraAbilitySystemLibrary::SetDamageType(
 	}
 }
 
+void UAuraAbilitySystemLibrary::SetDeathImpulse(
+	FGameplayEffectContextHandle& EffectContextHandle, const FVector& InDeathImpulse)
+{
+	if (FAuraGameplayEffectContext* AuraEffectContext =
+		static_cast<FAuraGameplayEffectContext*>(EffectContextHandle.Get()))
+	{
+		AuraEffectContext->SetDeathImpulse(InDeathImpulse);
+	}
+}
+
+void UAuraAbilitySystemLibrary::SetKnockbackForce(
+	FGameplayEffectContextHandle& EffectContextHandle, const FVector& InKnockbackForce)
+{
+	if (FAuraGameplayEffectContext* AuraEffectContext =
+		static_cast<FAuraGameplayEffectContext*>(EffectContextHandle.Get()))
+	{
+		AuraEffectContext->SetKnockbackForce(InKnockbackForce);
+	}
+}
+
 FGameplayEffectContextHandle UAuraAbilitySystemLibrary::ApplyDamageEffect(
 	const FDamageEffectParams& DamageEffectParams)
 {
@@ -335,10 +377,20 @@ FGameplayEffectContextHandle UAuraAbilitySystemLibrary::ApplyDamageEffect(
 	check(DamageEffectParams.TargetAbilitySystemComponent);
 	check(DamageEffectParams.DamageGameplayEffectClass);
 
-	FGameplayEffectContextHandle EffectContextHandle =
-		DamageEffectParams.SourceAbilitySystemComponent->MakeEffectContext();
+	FGameplayEffectContextHandle EffectContextHandle = DamageEffectParams.SourceAbilitySystemComponent->MakeEffectContext();
 	AActor* SourceAvatarActor = DamageEffectParams.SourceAbilitySystemComponent->GetAvatarActor();
 	EffectContextHandle.AddSourceObject(SourceAvatarActor);
+	SetDeathImpulse(EffectContextHandle, DamageEffectParams.DeathImpulse);
+
+	// 只在服务端真正应用伤害时掷一次骰子，避免 Projectile、近战和客户端重复随机。
+	// 成功结果写入 Context；零向量表示这一次命中没有触发击退。
+	const bool bKnockback = DamageEffectParams.KnockbackChance > 0.f &&
+		!DamageEffectParams.KnockbackForce.IsNearlyZero() &&
+		FMath::FRandRange(0.f, 100.f) < DamageEffectParams.KnockbackChance;
+	if (bKnockback)
+	{
+		SetKnockbackForce(EffectContextHandle, DamageEffectParams.KnockbackForce);
+	}
 
 	// Context 保存这次伤害的来源，后续格挡、暴击和浮动伤害文字都可以读取它。
 	const FGameplayEffectSpecHandle SpecHandle =
@@ -356,6 +408,7 @@ FGameplayEffectContextHandle UAuraAbilitySystemLibrary::ApplyDamageEffect(
 
 	const FAuraGameplayTags& GameplayTags = FAuraGameplayTags::Get();
 	// Debuff 参数也随同一个 Spec 传递，后续 Debuff 逻辑可以按 Tag 读取它们。
+	//  先存在 set by caller ，等后面 在 exec calc 确认要触发 debuff 时，再把这些值转存到 EffectContext 里供 AttributeSet 使用。
 	UAbilitySystemBlueprintLibrary::AssignTagSetByCallerMagnitude(
 		SpecHandle, GameplayTags.Debuff_Chance, DamageEffectParams.DebuffChance);
 	UAbilitySystemBlueprintLibrary::AssignTagSetByCallerMagnitude(

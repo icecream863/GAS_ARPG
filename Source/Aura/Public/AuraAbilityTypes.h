@@ -50,6 +50,24 @@ struct FDamageEffectParams
 
 	UPROPERTY(BlueprintReadWrite)
 	float DebuffFrequency = 0.f;
+
+	// 标量来自技能默认值，后续在命中点结合投射物方向生成冲量向量。
+	UPROPERTY(BlueprintReadWrite)
+	float DeathImpulseMagnitude = 0.f;
+
+	// Projectile 命中时根据实际飞行方向计算出的最终冲量。
+	UPROPERTY(BlueprintReadWrite)
+	FVector DeathImpulse = FVector::ZeroVector;
+
+	UPROPERTY(BlueprintReadWrite)
+	float KnockbackForceMagnitude = 0.f;
+
+	UPROPERTY(BlueprintReadWrite)
+	float KnockbackChance = 0.f;
+
+	// 非致死命中使用的 LaunchCharacter 速度；方向在命中或直接伤害选定目标时计算。
+	UPROPERTY(BlueprintReadWrite)
+	FVector KnockbackForce = FVector::ZeroVector;
 };
 
 /**
@@ -77,6 +95,8 @@ struct FAuraGameplayEffectContext : public FGameplayEffectContext
 	float GetDebuffDuration() const { return DebuffDuration; }
 	float GetDebuffFrequency() const { return DebuffFrequency; }
 	TSharedPtr<FGameplayTag> GetDamageType() const { return DamageType; }
+	FVector GetDeathImpulse() const { return DeathImpulse; }
+	FVector GetKnockbackForce() const { return KnockbackForce; }
 	
 	/** 设置是否格挡（一般在服务端伤害结算时写入） */
 	void SetBlockedHit(bool bInIsBlockedHit) { bIsBlockedHit = bInIsBlockedHit; }
@@ -87,6 +107,8 @@ struct FAuraGameplayEffectContext : public FGameplayEffectContext
 	void SetDebuffDuration(float InDebuffDuration) { DebuffDuration = InDebuffDuration; }
 	void SetDebuffFrequency(float InDebuffFrequency) { DebuffFrequency = InDebuffFrequency; }
 	void SetDamageType(const FGameplayTag& InDamageType) { DamageType = MakeShared<FGameplayTag>(InDamageType); }
+	void SetDeathImpulse(const FVector& InDeathImpulse) { DeathImpulse = InDeathImpulse; }
+	void SetKnockbackForce(const FVector& InKnockbackForce) { KnockbackForce = InKnockbackForce; }
 	
 	/**
 	 * 创建该 Context 的拷贝。
@@ -96,7 +118,7 @@ struct FAuraGameplayEffectContext : public FGameplayEffectContext
 	 * - 基类数据被复制
 	 * - HitResult 做深拷贝（因为它在基类里以共享指针形式保存）
 	 */
-	virtual FAuraGameplayEffectContext* Duplicate() const
+	virtual FAuraGameplayEffectContext* Duplicate() const override
 	{
 		FAuraGameplayEffectContext* NewContext = new FAuraGameplayEffectContext();
 		*NewContext = *this;
@@ -159,6 +181,14 @@ protected:
 
 	// FGameplayTag 自己支持 NetSerialize；共享指针允许在反序列化时按需创建实例。
 	TSharedPtr<FGameplayTag> DamageType;
+
+	UPROPERTY()
+	FVector DeathImpulse = FVector::ZeroVector;
+
+	// 这是“本次命中已经判定成功”的击退速度；零向量表示本次没有触发击退。
+	// 它写入 EffectContext 后可随伤害上下文复制，客户端读取到的结论与服务器一致。
+	UPROPERTY()
+	FVector KnockbackForce = FVector::ZeroVector;
 };
 
 /**

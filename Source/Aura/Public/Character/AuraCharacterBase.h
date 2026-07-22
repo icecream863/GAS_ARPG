@@ -37,7 +37,7 @@ public:
 	virtual void BeginPlay() override;
 	
 	/** CombatInterface */
-	virtual void Die() override;
+	virtual void Die(const FVector& DeathImpulse) override;
 	virtual UAnimMontage* GetHitReactMontage_Implementation() override;
 	virtual FVector GetCombatSocketLocation_Implementation(const FGameplayTag& MontageTag) override;
 	virtual bool IsDead_Implementation() const override;
@@ -56,17 +56,17 @@ public:
 	
 
 	UFUNCTION(NetMulticast, Reliable)
-	virtual void MulticastHandleDeath();
+	virtual void MulticastHandleDeath(const FVector& DeathImpulse);
 	
 	/**
 	 *这是一个在虚幻引擎 (Unreal Engine) 中声明的 多播 RPC (Remote Procedure Call) 函数。
 	 *UFUNCTION(NetMulticast, Reliable)：
 	 *NetMulticast：表示该函数如果在服务器上调用，将会在服务器以及所有连接的客户端上广播并执行。通常用于在所有端同步视觉效果或音效。
 	 *Reliable：表示该网络调用是可靠的，引擎会确保数据包成功送达并执行，不会因为网络环境差而发生丢包。
-	 *virtual void MulticastHandleDeath();：表示这是一个处理角色死亡逻辑的虚函数，通常会在触发时让所有客户端同步表现该角色的死亡状态（如播放死亡动画、关闭碰撞等）。
+	 *virtual void MulticastHandleDeath(const FVector& DeathImpulse);：表示这是一个处理角色死亡逻辑的虚函数，通常会在所有客户端同步死亡表现和冲量。
 	 *在虚幻引擎中，声明为 RPC（如 NetMulticast、Server 或 Client）的函数，在 C++ 中实现时需要在函数名后加上 _Implementation 后缀。
 	  对于 MulticastHandleDeath，你应该在对应的 .cpp 文件（如 AuraCharacterBase.cpp）中按照以下方式编写它的实现：
-	  void AAuraCharacterBase::MulticastHandleDeath_Implementation()
+	  void AAuraCharacterBase::MulticastHandleDeath_Implementation(const FVector& DeathImpulse)
 	  {
 	  // 在这里编写角色死亡时需要在所有端同步执行的逻辑
 	  // 例如：播放死亡动画、生成布娃娃效果、禁用碰撞、播放音效等

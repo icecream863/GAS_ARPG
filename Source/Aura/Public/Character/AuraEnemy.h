@@ -46,7 +46,7 @@ public:
 	
 	void HitReactTagChanged(const FGameplayTag CallbackTag, int32 NewCount);
 	
-	virtual void Die() override;
+	virtual void Die(const FVector& DeathImpulse) override;
 	
 	UPROPERTY(BlueprintReadOnly, Category = "Combat")
 	bool bHitReact = false;

@@ -3,6 +3,7 @@
 
 #include "AbilitySystem/Abilities/AuraDamageGameplayAbility.h"
 
+#include "AbilitySystem/AuraAbilitySystemLibrary.h"
 #include "AbilitySystemBlueprintLibrary.h"
 #include "AbilitySystemComponent.h"
 #include "Interaction/CombatInterface.h"
@@ -23,19 +24,29 @@ FDamageEffectParams UAuraDamageGameplayAbility::MakeDamageEffectParamsFromClassD
 	Params.DebuffDamage = DebuffDamage;
 	Params.DebuffDuration = DebuffDuration;
 	Params.DebuffFrequency = DebuffFrequency;
+	Params.DeathImpulseMagnitude = DeathImpulseMagnitude;
+	Params.KnockbackForceMagnitude = KnockbackForceMagnitude;
+	Params.KnockbackChance = KnockbackChance;
+
+	if (IsValid(TargetActor))
+	{
+		if (const AActor* SourceAvatarActor = GetAvatarActorFromActorInfo())
+		{
+			// 直接伤害没有 Projectile 的飞行方向，因此用“施法者 -> 目标”生成默认方向，
+			// 再固定抬高 45 度；投射物命中时会用真实命中方向覆盖它。
+			FRotator KnockbackRotation = (TargetActor->GetActorLocation() - SourceAvatarActor->GetActorLocation()).Rotation();
+			KnockbackRotation.Pitch = 45.f;
+			const FVector KnockbackDirection = KnockbackRotation.Vector();
+			Params.DeathImpulse = KnockbackDirection * DeathImpulseMagnitude;
+			Params.KnockbackForce = KnockbackDirection * KnockbackForceMagnitude;
+		}
+	}
 	return Params;
 }
 
 void UAuraDamageGameplayAbility::CauseDamage(AActor* TargetActor)
 {
-	const FGameplayEffectSpecHandle DamageEffectSpecHandle = MakeOutgoingGameplayEffectSpec(DamageEffectClass, 1.f);//自动配置context等
-	UAbilitySystemBlueprintLibrary::AssignTagSetByCallerMagnitude(
-		DamageEffectSpecHandle,
-		DamageType,
-		Damage.GetValueAtLevel(GetAbilityLevel()));
-	
-	GetAbilitySystemComponentFromActorInfo()->ApplyGameplayEffectSpecToTarget(*DamageEffectSpecHandle.Data.Get(),
-		UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(TargetActor));
+	UAuraAbilitySystemLibrary::ApplyDamageEffect(MakeDamageEffectParamsFromClassDefaults(TargetActor));
 }
 
 FTaggedMontage UAuraDamageGameplayAbility::GetRandomTaggedMontageFromArray(

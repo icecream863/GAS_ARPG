@@ -62,7 +62,7 @@ public:
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable)//这个函数既可以在蓝图中实现，也可以在C++中实现，如果蓝图没有实现，就会调用C++中的实现。
 	UAnimMontage* GetHitReactMontage();
 	
-	virtual void Die() = 0;
+	virtual void Die(const FVector& DeathImpulse) = 0;
 	virtual FOnASCRegistered& GetOnASCRegisteredDelegate() = 0;
 	virtual FOnDeath& GetOnDeathDelegate() = 0;
 	

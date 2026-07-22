@@ -37,6 +37,8 @@ bool FAuraGameplayEffectContext::NetSerialize(FArchive& Ar, class UPackageMap* M
 		//   bit9: bIsSuccessfulDebuff
 		//   bit10-12: DebuffDamage / Duration / Frequency
 		//   bit13: DamageType
+		//   bit14: DeathImpulse
+		//   bit15: KnockbackForce
 		*/
 		if (bReplicateInstigator && Instigator.IsValid())
 		{
@@ -94,13 +96,21 @@ bool FAuraGameplayEffectContext::NetSerialize(FArchive& Ar, class UPackageMap* M
 		{
 			RepBits |= 1 << 13;
 		}
+		if (!DeathImpulse.IsZero())
+		{
+			RepBits |= 1 << 14;
+		}
+		if (!KnockbackForce.IsZero())
+		{
+			RepBits |= 1 << 15;
+		}
 	}
 
 	// ------------------------------------------------------------
-	// 2) 先序列化位掩码本身。最高使用 bit13，因此总共需要 14 位。
+	// 2) 先序列化位掩码本身。最高使用 bit15，因此总共需要 16 位。
 	//    Loading 时会先把 RepBits 读回来，后续就知道要读哪些字段。
 	// ------------------------------------------------------------
-	Ar.SerializeBits(&RepBits, 14);
+	Ar.SerializeBits(&RepBits, 16);
 	
 	// ------------------------------------------------------------
 	// 3) 根据 RepBits 序列化/反序列化各字段（顺序必须固定），可以知道 Ar.IsSaving() Ar.IsLoading(): 
@@ -186,6 +196,14 @@ bool FAuraGameplayEffectContext::NetSerialize(FArchive& Ar, class UPackageMap* M
 			DamageType = MakeShared<FGameplayTag>();
 		}
 		DamageType->NetSerialize(Ar, Map, bOutSuccess);
+	}
+	if (RepBits & (1 << 14))
+	{
+		DeathImpulse.NetSerialize(Ar, Map, bOutSuccess);
+	}
+	if (RepBits & (1 << 15))
+	{
+		KnockbackForce.NetSerialize(Ar, Map, bOutSuccess);
 	}
 
 	if (Ar.IsLoading())

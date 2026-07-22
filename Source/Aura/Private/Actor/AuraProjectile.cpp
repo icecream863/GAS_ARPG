@@ -103,6 +103,21 @@ void AAuraProjectile::OnSphereOverlap(UPrimitiveComponent* OverlappedComponent, 
 		if (UAbilitySystemComponent* TargetASC = UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(OtherActor))
 		{
 			DamageEffectParams.TargetAbilitySystemComponent = TargetASC;
+
+			// 不直接使用带俯仰角的火球前向量，否则向上/向下瞄准会把布娃娃打向天空或地面。
+			// 保留水平命中方向，再叠加固定的小上抬量，使死亡表现可预测且便于调参。
+			FVector DeathImpulseDirection = GetActorForwardVector().GetSafeNormal2D();
+			if (DeathImpulseDirection.IsNearlyZero())
+			{
+				DeathImpulseDirection =
+					(OtherActor->GetActorLocation() - SourceAvatarActor->GetActorLocation()).GetSafeNormal2D();
+			}
+			DeathImpulseDirection = (DeathImpulseDirection + FVector::UpVector * 0.25f).GetSafeNormal();
+			DamageEffectParams.DeathImpulse = DeathImpulseDirection * DamageEffectParams.DeathImpulseMagnitude;
+			FRotator KnockbackRotation = GetActorRotation();
+			KnockbackRotation.Pitch = 45.f;
+			DamageEffectParams.KnockbackForce =
+				KnockbackRotation.Vector() * DamageEffectParams.KnockbackForceMagnitude;
 			UAuraAbilitySystemLibrary::ApplyDamageEffect(DamageEffectParams);
 		}
 		
