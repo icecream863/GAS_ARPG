@@ -10,7 +10,10 @@
 #include "Aura/Aura.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "Kismet/GameplayStatics.h"
+#include "Net/UnrealNetwork.h"
+#include "UObject/ConstructorHelpers.h"
 
 // Sets default values
 AAuraCharacterBase::AAuraCharacterBase()
@@ -21,6 +24,18 @@ AAuraCharacterBase::AAuraCharacterBase()
 	BurnDebuffComponent = CreateDefaultSubobject<UDebuffNiagaraComponent>(TEXT("BurnDebuffComponent"));
 	BurnDebuffComponent->SetupAttachment(GetRootComponent());
 	BurnDebuffComponent->DebuffTag = FAuraGameplayTags::Get().Debuff_Burn;
+
+	StunDebuffComponent = CreateDefaultSubobject<UDebuffNiagaraComponent>(TEXT("StunDebuffComponent"));
+	StunDebuffComponent->SetupAttachment(GetRootComponent());
+	StunDebuffComponent->DebuffTag = FAuraGameplayTags::Get().Debuff_Stun;
+	StunDebuffComponent->SetRelativeLocation(FVector(0.f, 0.f, 120.f));
+	static ConstructorHelpers::FObjectFinder<UNiagaraSystem> StunSystem(
+		TEXT("/Game/Assets/Effects/Stun/NS_Stars.NS_Stars"));
+	if (StunSystem.Succeeded())
+	{
+		// 提供稳定的通用默认值；体型特殊的敌人仍可在角色蓝图中覆写位置或系统。
+		StunDebuffComponent->SetAsset(StunSystem.Object);
+	}
 
 	Weapon = CreateDefaultSubobject<USkeletalMeshComponent>(FName("Weapon") );
 	Weapon->SetupAttachment(GetMesh(), FName("WeaponHandSocket"));
@@ -59,6 +74,14 @@ void AAuraCharacterBase::Die(const FVector& DeathImpulse)
 	MulticastHandleDeath(DeathImpulse);
 }
 
+void AAuraCharacterBase::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME(AAuraCharacterBase, bIsStunned);
+	DOREPLIFETIME(AAuraCharacterBase, bIsBurned);
+	DOREPLIFETIME(AAuraCharacterBase, bIsBeingShocked);
+}
+
 void AAuraCharacterBase::MulticastHandleDeath_Implementation(const FVector& DeathImpulse)
 {
 	
@@ -80,6 +103,8 @@ void AAuraCharacterBase::MulticastHandleDeath_Implementation(const FVector& Deat
 	GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 
 	bDead = true;
+	BurnDebuffComponent->Deactivate();
+	StunDebuffComponent->Deactivate();
 	OnDeath.Broadcast(this);
 
 }
@@ -110,6 +135,12 @@ FVector AAuraCharacterBase::GetCombatSocketLocation_Implementation(const FGamepl
 	
 	return FVector::ZeroVector;
 	
+}
+
+USkeletalMeshComponent* AAuraCharacterBase::GetWeapon_Implementation()
+{
+	// Weapon 是角色拥有的骨骼网格组件；Cue 可将 Niagara 系统附着到它的 TipSocket。
+	return Weapon;
 }
 
 bool AAuraCharacterBase::IsDead_Implementation() const
@@ -182,6 +213,88 @@ UAnimMontage* AAuraCharacterBase::GetHitReactMontage_Implementation()
 
 void AAuraCharacterBase::InitAbilityActorInfo()
 {
+}
+
+bool AAuraCharacterBase::IsBeingShocked_Implementation() const
+{
+	return bIsBeingShocked;
+}
+
+void AAuraCharacterBase::SetIsBeingShocked_Implementation(bool bInShock)
+{
+	bIsBeingShocked = bInShock;
+}
+
+void AAuraCharacterBase::RegisterDebuffTagEvents()
+{
+	if (!HasAuthority() || !IsValid(AbilitySystemComponent))
+	{
+		return;
+	}
+
+	const FGameplayTag StunTag = FAuraGameplayTags::Get().Debuff_Stun;
+	FOnGameplayEffectTagCountChanged& StunTagDelegate =
+		AbilitySystemComponent->RegisterGameplayTagEvent(StunTag, EGameplayTagEventType::NewOrRemoved);
+	StunTagDelegate.RemoveAll(this);
+	StunTagDelegate.AddUObject(this, &AAuraCharacterBase::StunTagChanged);
+
+	// ASC 初始化时可能已经存在 Stun 标签，注册后立即同步一次当前状态。
+	StunTagChanged(StunTag, AbilitySystemComponent->GetTagCount(StunTag));
+
+	const FGameplayTag BurnTag = FAuraGameplayTags::Get().Debuff_Burn;
+	FOnGameplayEffectTagCountChanged& BurnTagDelegate =
+		AbilitySystemComponent->RegisterGameplayTagEvent(BurnTag, EGameplayTagEventType::NewOrRemoved);
+	BurnTagDelegate.RemoveAll(this);
+	BurnTagDelegate.AddUObject(this, &AAuraCharacterBase::BurnTagChanged);
+	BurnTagChanged(BurnTag, AbilitySystemComponent->GetTagCount(BurnTag));
+}
+
+void AAuraCharacterBase::StunTagChanged(const FGameplayTag CallbackTag, int32 NewCount)
+{
+	bIsStunned = NewCount > 0;
+	ApplyStunMovementState();
+}
+
+void AAuraCharacterBase::OnRep_Stunned()
+{
+	ApplyStunMovementState();
+	if (bIsStunned)
+	{
+		StunDebuffComponent->Activate();
+	}
+	else
+	{
+		StunDebuffComponent->Deactivate();
+	}
+}
+
+void AAuraCharacterBase::BurnTagChanged(const FGameplayTag CallbackTag, int32 NewCount)
+{
+	bIsBurned = NewCount > 0;
+}
+
+void AAuraCharacterBase::OnRep_Burned()
+{
+	if (bIsBurned)
+	{
+		BurnDebuffComponent->Activate();
+	}
+	else
+	{
+		BurnDebuffComponent->Deactivate();
+	}
+}
+
+void AAuraCharacterBase::ApplyStunMovementState()
+{
+	if (UCharacterMovementComponent* MovementComponent = GetCharacterMovement())
+	{
+		MovementComponent->MaxWalkSpeed = bIsStunned ? 0.f : BaseWalkSpeed;
+		if (bIsStunned)
+		{
+			MovementComponent->StopMovementImmediately();
+		}
+	}
 }
 
 void AAuraCharacterBase::ApplyEffectToSelf(TSubclassOf<UGameplayEffect> GameplayEffectClass, float Level) const

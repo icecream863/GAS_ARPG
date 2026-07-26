@@ -116,9 +116,24 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "AuraAbilitySystemLibrary | GameplayMechanics")	
 	static void GetLivePlayersWithinRadius(const UObject* WorldContextObject, TArray<AActor*>& OutOverlappingActors,const TArray<AActor*>& ActorsToIgnore, float Radius,const FVector& SphereOrigin);
 
+	/**
+	 * 从候选目标中取离 Origin 最近的至多 MaxTargets 个目标。
+	 * 候选目标的存活和阵营筛选由调用方负责；本函数只处理距离排序，便于被不同技能复用。
+	 */
+	static void GetClosestTargets(int32 MaxTargets, const TArray<AActor*>& Actors,
+		TArray<AActor*>& OutClosestTargets, const FVector& Origin);
+
 	UFUNCTION(BlueprintPure, Category = "AuraAbilitySystemLibrary | GameplayMechanics")	
 	static bool IsNotFriend(const AActor* FirstActor, const AActor* SecondActor);
-	
+
+	UFUNCTION(BlueprintPure, Category = "AuraAbilitySystemLibrary | GameplayMechanics")
+	static TArray<FRotator> EvenlySpacedRotators(const FVector& Forward, const FVector& Axis,
+		float Spread, int32 NumRotators);
+
+	UFUNCTION(BlueprintPure, Category = "AuraAbilitySystemLibrary | GameplayMechanics")
+	static TArray<FVector> EvenlyRotatedVectors(const FVector& Forward, const FVector& Axis,
+		float Spread, int32 NumVectors);
+
 	static int32 GetRewardForClassAndLevel(const UObject* WorldContextObject, const ECharacterClass CharacterClass, const int32 CharacterLevel);
 	
 };

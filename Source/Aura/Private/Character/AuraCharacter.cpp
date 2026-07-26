@@ -4,6 +4,7 @@
 #include "Character/AuraCharacter.h"
 
 #include "AbilitySystemComponent.h"
+#include "AuraGameplayTags.h"
 #include "NiagaraComponent.h"
 #include "AbilitySystem/AuraAbilitySystemComponent.h"
 #include "Camera/CameraComponent.h"
@@ -56,6 +57,12 @@ void AAuraCharacter::InitAbilityActorInfo()
 	AbilitySystemComponent = AuraPlayerState->GetAbilitySystemComponent();
 	AttributeSet = AuraPlayerState->GetAttributeSet();
 	OnASCRegistered.Broadcast(AbilitySystemComponent);
+	RegisterDebuffTagEvents();
+	if (!HasAuthority())
+	{
+		// RepNotify 可能早于 ASC 初始化；ActorInfo 就绪后再同步一次本地输入标签。
+		OnRep_Stunned();
+	}
 	
 	if (AAuraPlayerController* AuraPlayerController = Cast<AAuraPlayerController>(GetController()) )
 	{
@@ -66,6 +73,32 @@ void AAuraCharacter::InitAbilityActorInfo()
 	}
 	
 	InitialDefaultAttributes();//初始化默认属性
+}
+
+void AAuraCharacter::OnRep_Stunned()
+{
+	Super::OnRep_Stunned();
+
+	if (!IsValid(AbilitySystemComponent))
+	{
+		return;
+	}
+
+	const FAuraGameplayTags& GameplayTags = FAuraGameplayTags::Get();
+	FGameplayTagContainer BlockedInputTags;
+	BlockedInputTags.AddTag(GameplayTags.Player_Block_CursorTrace);
+	BlockedInputTags.AddTag(GameplayTags.Player_Block_InputPressed);
+	BlockedInputTags.AddTag(GameplayTags.Player_Block_InputHeld);
+	BlockedInputTags.AddTag(GameplayTags.Player_Block_InputReleased);
+
+	if (bIsStunned)
+	{
+		AbilitySystemComponent->AddLooseGameplayTags(BlockedInputTags);
+	}
+	else
+	{
+		AbilitySystemComponent->RemoveLooseGameplayTags(BlockedInputTags);
+	}
 }
 
 

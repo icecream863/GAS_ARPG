@@ -45,14 +45,12 @@ public:
 	virtual void BeginPlay() override;
 	
 	void HitReactTagChanged(const FGameplayTag CallbackTag, int32 NewCount);
+	virtual void StunTagChanged(const FGameplayTag CallbackTag, int32 NewCount) override;
 	
 	virtual void Die(const FVector& DeathImpulse) override;
 	
 	UPROPERTY(BlueprintReadOnly, Category = "Combat")
 	bool bHitReact = false;
-	
-	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "Combat")
-	float BaseWalkSpeed = 250.f;
 	
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Combat")
 	float LifeSpan = 5.f;

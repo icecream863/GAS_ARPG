@@ -9,6 +9,7 @@
 
 class UNiagaraSystem;
 class USphereComponent;
+class USceneComponent;
 class UProjectileMovementComponent;
 
 UCLASS()
@@ -19,6 +20,12 @@ class AURA_API AAuraProjectile : public AActor
 public:	
 
 	AAuraProjectile();
+
+	/**
+	 * 保存真实追踪目标并在服务端监听其死亡/销毁。
+	 * 目标提前消失时，投射物会立即走正常 Impact 路径，而不是依靠 Tick 轮询移动距离。
+	 */
+	void SetHomingTarget(AActor* Target);
 	
 	virtual void Destroyed() override;
 	
@@ -32,6 +39,10 @@ public:
 	解决的问题：它避免了“先生成、再赋值”的尴尬。如果在赋值前子弹就撞到了物体，此时变量为空就会报错；
 	使用 ExposeOnSpawn 可以确保子弹在诞生那一刻就已经持有了伤害数据。	
 	*/
+
+	// 地面点击没有可追踪的 Actor 时，由投射物持有这个虚拟目标，确保它随投射物一起被 GC。
+	UPROPERTY()
+	TObjectPtr<USceneComponent> HomingTargetSceneComponent;
 	
 protected:
 	
@@ -51,6 +62,17 @@ private:
 	
 	float LifeSpan = 15.f;
 	bool bHit = false;
+
+	UFUNCTION()
+	void OnHomingTargetDied(AActor* DeadActor);
+
+	UFUNCTION()
+	void OnHomingTargetDestroyed(AActor* DestroyedActor);
+
+	void UnbindHomingTarget();
+	void DetonateWhenHomingTargetIsLost();
+
+	TWeakObjectPtr<AActor> HomingTargetActor;
 	
 	
 	UPROPERTY(EditAnywhere)

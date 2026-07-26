@@ -3,6 +3,7 @@
 
 #include "Player/AuraPlayerController.h"
 #include "NavigationSystem.h"
+#include "NiagaraFunctionLibrary.h"
 #include "NavigationPath.h"
 #include "Components/SplineComponent.h"
 #include "DrawDebugHelpers.h"
@@ -106,7 +107,18 @@ void AAuraPlayerController::AutoRun()
 }
 
 void AAuraPlayerController::CursorTrace()
-{	
+	{
+	if (const UAuraAbilitySystemComponent* ASC = GetASC(); ASC && ASC->HasMatchingGameplayTag(FAuraGameplayTags::Get().Player_Block_CursorTrace))
+	{
+		// 技能激活前可能已有敌人处于高亮状态；这里先清除旧表现，
+		// 再跳过后续射线检测，避免施法期间保留过时的鼠标指向反馈。
+		if (LastActor) LastActor->UnHighLightActor();
+		if (ThisActor) ThisActor->UnHighLightActor();
+		LastActor = nullptr;
+		ThisActor = nullptr;
+		return;
+	}
+
 	GetHitResultUnderCursor(ECC_Visibility, false, CursorHit);
 	if (!CursorHit.bBlockingHit) return ;
 	
@@ -121,6 +133,10 @@ void AAuraPlayerController::CursorTrace()
 //Pressed更多是\“开始记录状态\”，Held/Released才是\“根据最终意图执行\”。这样才能同时兼容点击移动、按住跟随、以及对目标释放技能这几种行为而不冲突。
 void AAuraPlayerController::AbilityInputTagPressed(FGameplayTag InputTag)
 {
+	if (const UAuraAbilitySystemComponent* ASC = GetASC(); ASC && ASC->HasMatchingGameplayTag(FAuraGameplayTags::Get().Player_Block_InputPressed)) return;
+
+	if (GetASC()) GetASC()->AbilityInputTagPressed(InputTag);
+
 	if (InputTag.MatchesTagExact(FAuraGameplayTags::Get().InputTag_LMB))
 	{
 		bTargeting = ThisActor ? true : false;
@@ -129,7 +145,9 @@ void AAuraPlayerController::AbilityInputTagPressed(FGameplayTag InputTag)
 }
 
 void AAuraPlayerController::AbilityInputTagReleased( FGameplayTag InputTag)
-{	
+	{
+	if (const UAuraAbilitySystemComponent* ASC = GetASC(); ASC && ASC->HasMatchingGameplayTag(FAuraGameplayTags::Get().Player_Block_InputReleased)) return;
+
 	if (!InputTag.MatchesTagExact(FAuraGameplayTags::Get().InputTag_LMB))
 	{
 		if (GetASC())
@@ -147,24 +165,32 @@ void AAuraPlayerController::AbilityInputTagReleased( FGameplayTag InputTag)
 		if (FollowTime < ShortPressThreshold)
 		{
 			APawn* ControlledPawn = GetPawn();
-			UNavigationPath* NavPath = UNavigationSystemV1::FindPathToLocationSynchronously(GetWorld(), ControlledPawn->GetActorLocation(), CachedDestination);
-			if (NavPath && ControlledPawn)
+			UNavigationPath* NavPath = ControlledPawn
+				? UNavigationSystemV1::FindPathToLocationSynchronously(GetWorld(), ControlledPawn->GetActorLocation(), CachedDestination)
+				: nullptr;
+			if (NavPath)
 			{
 				Spline->ClearSplinePoints();
-					
+
 				for (const FVector& PointLoc : NavPath->PathPoints)
 				{
 					Spline->AddSplinePoint(PointLoc, ESplineCoordinateSpace::World);
 				}
 			}
-			
+
 			if (NavPath && NavPath->PathPoints.Num() > 0)
 			{
 				CachedDestination = NavPath->PathPoints[NavPath->PathPoints.Num() - 1];
-			
+
 				bAutoRunning = true;
+				// 短按点击特效也必须遵守 Pressed 屏蔽；否则引导技能期间虽然输入未生效，
+				// 玩家仍会看到与实际操作不一致的地面点击反馈。
+				if (const UAuraAbilitySystemComponent* ASC = GetASC(); !ASC || !ASC->HasMatchingGameplayTag(FAuraGameplayTags::Get().Player_Block_InputPressed))
+				{
+					UNiagaraFunctionLibrary::SpawnSystemAtLocation(this, ClickNiagaraSystem, CachedDestination);
+				}
 			}
-			
+
 		}
 		FollowTime = 0.f;
 		bTargeting = false;
@@ -176,6 +202,8 @@ void AAuraPlayerController::AbilityInputTagReleased( FGameplayTag InputTag)
 // 真正释放技能的地方，
 void AAuraPlayerController::AbilityInputTagHeld(FGameplayTag InputTag)
 {
+	if (const UAuraAbilitySystemComponent* ASC = GetASC(); ASC && ASC->HasMatchingGameplayTag(FAuraGameplayTags::Get().Player_Block_InputHeld)) return;
+
 	if (!InputTag.MatchesTagExact(FAuraGameplayTags::Get().InputTag_LMB))
 	{
 		if (GetASC())
@@ -219,7 +247,11 @@ UAuraAbilitySystemComponent* AAuraPlayerController::GetASC()
 
 
 void AAuraPlayerController::Move(const struct FInputActionValue& InputActinValue)
-{	
+	{
+	// WASD 同样由 PlayerController 回调处理，因此也要使用 Pressed 屏蔽标签，
+	// 防止引导施法期间仍能通过键盘移动角色。
+	if (const UAuraAbilitySystemComponent* ASC = GetASC(); ASC && ASC->HasMatchingGameplayTag(FAuraGameplayTags::Get().Player_Block_InputPressed)) return;
+
 	const FVector2D InputAxiVector2D = InputActinValue.Get<FVector2D>();
 	const FRotator Rotation = GetControlRotation();
 	const FRotator YawRatation = FRotator(0.f, Rotation.Yaw, 0.f);

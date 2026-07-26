@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
 #include "GameplayTagContainer.h"
+#include "Engine/HitResult.h"
 
 #include "AuraPlayerController.generated.h"
 
@@ -14,6 +15,7 @@ class IEnemyInterface;
 class UInputAction;
 class UInputMappingContext;
 class UAuraAbilitySystemComponent;
+class UNiagaraSystem;
 class USplineComponent;
 
 /**
@@ -119,6 +121,9 @@ private:
 	/** 导航路径样条：短按松开时将寻路点填入Spline，AutoRun()沿其移动角色 */
 	UPROPERTY(VisibleAnywhere)
 	TObjectPtr<USplineComponent> Spline;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Input")
+	TObjectPtr<UNiagaraSystem> ClickNiagaraSystem;
 
 	/** 每帧沿Spline移动角色，到达CachedDestination容差范围内停止 */
 	void AutoRun();

@@ -47,6 +47,14 @@ public:
 	FGameplayTag InputTag_4;
 	FGameplayTag InputTag_Passive_1;
 	FGameplayTag InputTag_Passive_2;
+
+	//~ 玩家控制屏蔽标签
+	// 技能激活时通过 Activation Owned Tags 临时授予 ASC；玩家控制器统一查询它们，
+	// 以便同一套机制可复用于所有需要锁定局部交互的技能。
+	FGameplayTag Player_Block_CursorTrace;
+	FGameplayTag Player_Block_InputPressed;
+	FGameplayTag Player_Block_InputHeld;
+	FGameplayTag Player_Block_InputReleased;
 	
 	//~ Damage Tags
 	FGameplayTag Damage;

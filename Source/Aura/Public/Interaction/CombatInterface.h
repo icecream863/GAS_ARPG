@@ -10,6 +10,7 @@
 
 class UNiagaraSystem;
 class UAbilitySystemComponent;
+class USkeletalMeshComponent;
 
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnASCRegistered, UAbilitySystemComponent*);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnDeath, AActor*, DeadActor);
@@ -54,11 +55,28 @@ public:
 	
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
 	FVector GetCombatSocketLocation(const FGameplayTag& MontageTag);
+
+	/**
+	 * 返回角色当前用于战斗的武器组件。
+	 * Gameplay Cue 通过该组件取得稳定的附着目标，而不需要知道具体角色类或武器骨骼结构。
+	 */
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
+	USkeletalMeshComponent* GetWeapon();
 	
 	UFUNCTION(BlueprintImplementableEvent, BlueprintCallable)//这个函数只能在蓝图中实现，不能在C++中实 现，如果C++中调用这个函数，必须在蓝图中实现，否则会报错。
 	void UpdateFacingTarget(const FVector& FacingTarget);
 	//利用函数重载，具体类重载这个函数，而掉用只需转化成接口指针调用这个函数就好，接口指针会根据实际对象类型调用对应的重载函数。
-	
+
+	UFUNCTION(BlueprintImplementableEvent, BlueprintCallable)
+	void SetInShockLoop(bool bInLoop);
+
+	/** 目标正在承受 Electrocute 持续电击，而不是施法者正在播放 ShockLoop。 */
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
+	bool IsBeingShocked() const;
+
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
+	void SetIsBeingShocked(bool bInShock);
+
 	UFUNCTION(BlueprintNativeEvent, BlueprintCallable)//这个函数既可以在蓝图中实现，也可以在C++中实现，如果蓝图没有实现，就会调用C++中的实现。
 	UAnimMontage* GetHitReactMontage();
 	

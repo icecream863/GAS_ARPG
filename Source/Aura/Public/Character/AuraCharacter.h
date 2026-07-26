@@ -39,7 +39,6 @@ public:
 	virtual int32 GetAttributePoints_Implementation() const override;
 	virtual int32 GetAttributePointsReward_Implementation(int Level) const override;
 	virtual int32 GetSpellPointsReward_Implementation(int Level) const override;
-	
 	/** End PlayerInterface */
 	
 	
@@ -59,6 +58,7 @@ public:
 protected:
 	// 统一初始化 AbilityActorInfo，绑定 Owner/Avatar 到 ASC, 初始化默认属性
 	virtual void InitAbilityActorInfo() override;
+	virtual void OnRep_Stunned() override;
 	
 private:
 	

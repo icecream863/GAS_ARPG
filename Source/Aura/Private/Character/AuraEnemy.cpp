@@ -17,6 +17,7 @@
 
 AAuraEnemy::AAuraEnemy()
 {
+	BaseWalkSpeed = 250.f;
 	GetMesh()->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
 	
 	AbilitySystemComponent = CreateDefaultSubobject<UAuraAbilitySystemComponent>(FName("AbilitySystemComponent"));
@@ -116,7 +117,7 @@ void AAuraEnemy::HitReactTagChanged(const FGameplayTag CallbackTag, int32 NewCou
 {
 	bHitReact = NewCount > 0 ? true : false;
 	
-	GetCharacterMovement()->MaxWalkSpeed = bHitReact ? 0.f : BaseWalkSpeed;
+	GetCharacterMovement()->MaxWalkSpeed = (bHitReact || bIsStunned) ? 0.f : BaseWalkSpeed;
 
 	// 仅把 MaxWalkSpeed 设为 0 有时不足以立刻停下（AI MoveTo 可能还在驱动 PathFollowing），
 	// 所以这里显式停止当前移动。
@@ -149,6 +150,23 @@ void AAuraEnemy::Die(const FVector& DeathImpulse)
 		AuraAIController->GetBlackboardComponent()->SetValueAsBool(FName("Dead"), true);
 	}
 	Super::Die(DeathImpulse);
+}
+
+void AAuraEnemy::StunTagChanged(const FGameplayTag CallbackTag, int32 NewCount)
+{
+	Super::StunTagChanged(CallbackTag, NewCount);
+
+	// HitReact 与 Stun 可以重叠；任一状态仍存在时都不能恢复移动速度。
+	GetCharacterMovement()->MaxWalkSpeed = (bHitReact || bIsStunned) ? 0.f : BaseWalkSpeed;
+	if (bIsStunned && AuraAIController)
+	{
+		AuraAIController->StopMovement();
+	}
+
+	if (AuraAIController && AuraAIController->GetBlackboardComponent())
+	{
+		AuraAIController->GetBlackboardComponent()->SetValueAsBool(FName("Stunned"), bIsStunned);
+	}
 }
 
 void AAuraEnemy::HighLightActor()
@@ -192,6 +210,7 @@ void AAuraEnemy::InitAbilityActorInfo()
 		AuraASC->AbilityActorInfoSet();
 	}
 	OnASCRegistered.Broadcast(AbilitySystemComponent);
+	RegisterDebuffTagEvents();
 	
 	if (HasAuthority()) //GameMode 只存在于服务器，所以这个函数在客户端执行时会返回 空指针，因此要在服务端执行。
 	{

@@ -4,12 +4,41 @@
 #include "AbilitySystem/AuraAbilitySystemComponent.h"
 
 #include "AbilitySystemBlueprintLibrary.h"
+#include "Abilities/GameplayAbility.h"
 #include "AuraGameplayTags.h"
 #include "AbilitySystem/AuraAbilitySystemLibrary.h"
 #include "AbilitySystem/Abilities/AuraGameplayAbility.h"
 #include "AbilitySystem/Data/AbilityInfo.h"
 #include "Aura/AuraLogChannels.h"
 #include "Interaction/PlayerInterface.h"
+
+namespace
+{
+	/**
+	 * 获取当前正在运行的 Ability 实例所使用的 PredictionKey。
+	 * AbilityTask 会用 (SpecHandle, PredictionKey) 作为复制事件的索引；两者只要有一个不一致，
+	 * WaitInputPress/Release 即使收到了输入，也找不到自己注册的 Delegate。
+	 */
+	FPredictionKey GetActiveAbilityPredictionKey(const FGameplayAbilitySpec& AbilitySpec)
+	{
+		const TArray<UGameplayAbility*> AbilityInstances = AbilitySpec.GetAbilityInstances();
+		if (!AbilityInstances.IsEmpty())
+		{
+			// InstancedPerActor 通常只有一个实例；InstancedPerExecution 可能有多个，
+			// 输入事件应发送给最后创建、也就是当前这一次激活的实例。
+			if (const UGameplayAbility* ActiveInstance = AbilityInstances.Last())
+			{
+				return ActiveInstance->GetCurrentActivationInfo().GetActivationPredictionKey();
+			}
+		}
+
+		// 仅为旧的 NonInstanced Ability 保留回退。UE 5.8 已弃用 Spec 上的 ActivationInfo，
+		// 新的实例化 Ability 必须走上面的实例级 ActivationInfo。
+		PRAGMA_DISABLE_DEPRECATION_WARNINGS
+		return AbilitySpec.ActivationInfo.GetActivationPredictionKey();
+		PRAGMA_ENABLE_DEPRECATION_WARNINGS
+	}
+}
 
 
 // ~-在AbilityActorInfoSet函数中，我们将EffectApplied函数绑定到OnGameplayEffectAppliedDelegateToSelf委托上，这样每当一个GameplayEffect被应用到这个AbilitySystemComponent时，EffectApplied函数就会被调用。
@@ -59,6 +88,28 @@ void UAuraAbilitySystemComponent::AbilityInputTagHeld(const FGameplayTag& InputT
 	}
 }
 
+void UAuraAbilitySystemComponent::AbilityInputTagPressed(const FGameplayTag& InputTag)
+{
+	if (!InputTag.IsValid()) return;
+
+	for (FGameplayAbilitySpec& AbilitySpec : GetActivatableAbilities())
+	{
+		if (AbilitySpec.GetDynamicSpecSourceTags().HasTagExact(InputTag))
+		{
+			AbilitySpecInputPressed(AbilitySpec);
+
+			// WaitInputPress/Release 监听的是 Ability 的 replicated event，不是普通输入回调。
+			if (AbilitySpec.IsActive())
+			{
+				InvokeReplicatedEvent(
+					EAbilityGenericReplicatedEvent::InputPressed,
+					AbilitySpec.Handle,
+					GetActiveAbilityPredictionKey(AbilitySpec));
+			}
+		}
+	}
+}
+
 void UAuraAbilitySystemComponent::AbilityInputTagReleased(const FGameplayTag& InputTag)
 {
 
@@ -67,9 +118,14 @@ void UAuraAbilitySystemComponent::AbilityInputTagReleased(const FGameplayTag& In
 	{
 		if (AbilitySpec.GetDynamicSpecSourceTags().HasTagExact(InputTag))
 		{
-				// 无论技能是否正在运行，都应该通知“松开”事件
 				AbilitySpecInputReleased(AbilitySpec);
-
+				if (AbilitySpec.IsActive())
+				{
+					InvokeReplicatedEvent(
+						EAbilityGenericReplicatedEvent::InputReleased,
+						AbilitySpec.Handle,
+						GetActiveAbilityPredictionKey(AbilitySpec));
+				}
 		}
 	}
 }
@@ -397,5 +453,3 @@ void UAuraAbilitySystemComponent::ClearAbilitiesOfSlot(const FGameplayTag& Slot)
 		}
 	}
 }
-
-

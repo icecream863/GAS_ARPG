@@ -50,6 +50,11 @@ public:
 	void AbilityInputTagHeld(const FGameplayTag& InputTag);
 
 	/**
+	 * 输入标签首次按下时触发：只负责把一次性的 Pressed 事件转发给正在运行的 AbilityTask。
+	 */
+	void AbilityInputTagPressed(const FGameplayTag& InputTag);
+
+	/**
 	 * 输入标签被松开时触发：遍历可激活能力，找到匹配该输入标签的能力并通知 GAS 输入松开。
 	 */
 	void AbilityInputTagReleased(const FGameplayTag& InputTag);

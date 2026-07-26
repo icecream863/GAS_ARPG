@@ -109,8 +109,12 @@ static void DetermineDebuff(
 		TargetDebuffResistance = FMath::Max(TargetDebuffResistance, 0.f);
 
 		// 每 1 点对应抗性降低 1% 的 Debuff 触发概率。
-		const float EffectiveDebuffChance = SourceDebuffChance * (100.f - TargetDebuffResistance) / 100.f;
-		const bool bDebuff = FMath::RandRange(1, 100) < EffectiveDebuffChance;
+		const float EffectiveDebuffChance = FMath::Clamp(
+			SourceDebuffChance * (100.f - TargetDebuffResistance) / 100.f,
+			0.f,
+			100.f);
+		// FRand 返回 [0, 1)，因此零抗性下配置 100% 时一定成功，同时保留小数概率精度。
+		const bool bDebuff = FMath::FRand() * 100.f < EffectiveDebuffChance;
 		if (bDebuff)
 		{
 			FGameplayEffectContextHandle ContextHandle = Spec.GetContext();

@@ -3,6 +3,78 @@
 
 #include "AbilitySystem/Abilities/AuraFireBolt.h"
 
+#include "AbilitySystem/AuraAbilitySystemLibrary.h"
+#include "Actor/AuraProjectile.h"
+#include "Components/SceneComponent.h"
+#include "GameFramework/Pawn.h"
+#include "GameFramework/ProjectileMovementComponent.h"
+#include "Interaction/CombatInterface.h"
+#include "Engine/World.h"
+
+void UAuraFireBolt::SpawnProjectiles(const FVector& ProjectileTargetLocation, const FGameplayTag& SocketTag,
+	const bool bOverridePitch, const float PitchOverride, AActor* HomingTarget)
+{
+	AActor* AvatarActor = GetAvatarActorFromActorInfo();
+	if (!IsValid(AvatarActor) || !AvatarActor->HasAuthority() ||
+		!AvatarActor->GetClass()->ImplementsInterface(UCombatInterface::StaticClass()))
+	{
+		return;
+	}
+
+	const FVector SocketLocation = ICombatInterface::Execute_GetCombatSocketLocation(AvatarActor, SocketTag);
+	FRotator TargetRotation = (ProjectileTargetLocation - SocketLocation).Rotation();
+	if (bOverridePitch)
+	{
+		TargetRotation.Pitch = PitchOverride;
+	}
+
+	const FVector Forward = TargetRotation.Vector();
+	const int32 NumProjectilesToSpawn = FMath::Min(NumProjectiles, GetAbilityLevel());
+	const TArray<FRotator> Rotations = UAuraAbilitySystemLibrary::EvenlySpacedRotators(
+		Forward, FVector::UpVector, ProjectileSpread, NumProjectilesToSpawn);
+
+	for (const FRotator& Rotation : Rotations)
+	{
+		FTransform SpawnTransform;
+		SpawnTransform.SetLocation(SocketLocation);
+		SpawnTransform.SetRotation(Rotation.Quaternion());
+
+		AAuraProjectile* Projectile = GetWorld()->SpawnActorDeferred<AAuraProjectile>(
+			ProjectileClass,
+			SpawnTransform,
+			GetOwningActorFromActorInfo(),
+			Cast<APawn>(AvatarActor),
+			ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+
+		if (!Projectile)
+		{
+			continue;
+		}
+
+		Projectile->DamageEffectParams = MakeDamageEffectParamsFromClassDefaults();
+
+		if (IsValid(HomingTarget) && HomingTarget->Implements<UCombatInterface>())
+		{
+			Projectile->ProjectileMovement->HomingTargetComponent = HomingTarget->GetRootComponent();
+			Projectile->SetHomingTarget(HomingTarget);
+		}
+		else
+		{
+			// 世界几何的根组件位置通常不是鼠标命中点，因此创建一个位于点击位置的虚拟追踪目标。
+			Projectile->HomingTargetSceneComponent = NewObject<USceneComponent>(Projectile);
+			Projectile->HomingTargetSceneComponent->SetWorldLocation(ProjectileTargetLocation);
+			Projectile->ProjectileMovement->HomingTargetComponent = Projectile->HomingTargetSceneComponent;
+		}
+
+		Projectile->ProjectileMovement->HomingAccelerationMagnitude =
+			FMath::FRandRange(HomingAccelerationMin, HomingAccelerationMax);
+		Projectile->ProjectileMovement->bIsHomingProjectile = bLaunchHomingProjectiles;
+		Projectile->FinishSpawning(SpawnTransform);
+	}
+}
+
+
+
 FString UAuraFireBolt::GetDescription(int32 Level)
 {
 	const int32 ScaledDamage = FMath::RoundToInt(Damage.GetValueAtLevel(Level));

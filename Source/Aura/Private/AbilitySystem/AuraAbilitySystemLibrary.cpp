@@ -445,6 +445,28 @@ void UAuraAbilitySystemLibrary::GetLivePlayersWithinRadius(const UObject* WorldC
 
 }
 
+void UAuraAbilitySystemLibrary::GetClosestTargets(const int32 MaxTargets, const TArray<AActor*>& Actors,
+	TArray<AActor*>& OutClosestTargets, const FVector& Origin)
+{
+	OutClosestTargets.Reset();
+	if (MaxTargets <= 0 || Actors.IsEmpty())
+	{
+		return;
+	}
+
+	// 复制后排序，不能改变调用方传入的候选数组；DistSquared 避免无意义的开方运算。
+	TArray<AActor*> SortedActors = Actors;
+	SortedActors.RemoveAll([](const AActor* Actor) { return !IsValid(Actor); });
+	SortedActors.Sort([&Origin](const AActor& Left, const AActor& Right)
+	{
+		return FVector::DistSquared(Left.GetActorLocation(), Origin) <
+			FVector::DistSquared(Right.GetActorLocation(), Origin);
+	});
+
+	const int32 TargetCount = FMath::Min(MaxTargets, SortedActors.Num());
+	OutClosestTargets.Append(SortedActors.GetData(), TargetCount);
+}
+
 bool UAuraAbilitySystemLibrary::IsNotFriend(const AActor* FirstActor, const AActor* SecondActor)
 {
 	const bool bBothArePlayer = FirstActor->ActorHasTag("Player") && SecondActor->ActorHasTag("Player");
@@ -454,4 +476,57 @@ bool UAuraAbilitySystemLibrary::IsNotFriend(const AActor* FirstActor, const AAct
 	return bIsNotFriend;
 }
 
+TArray<FRotator> UAuraAbilitySystemLibrary::EvenlySpacedRotators(
+	const FVector& Forward, const FVector& Axis, float Spread, int32 NumRotators)
+{
+	TArray<FRotator> Rotators;
+	if (NumRotators <= 0)
+	{
+		return Rotators;
+	}
 
+	if (NumRotators == 1)
+	{
+		Rotators.Add(Forward.Rotation());
+		return Rotators;
+	}
+
+	const FVector LeftOfSpread = Forward.RotateAngleAxis(-Spread / 2.f, Axis);
+	const float DeltaSpread = Spread / (NumRotators - 1);
+	Rotators.Reserve(NumRotators);
+
+	for (int32 Index = 0; Index < NumRotators; ++Index)
+	{
+		const FVector Direction = LeftOfSpread.RotateAngleAxis(DeltaSpread * Index, Axis);
+		Rotators.Add(Direction.Rotation());
+	}
+
+	return Rotators;
+}
+
+TArray<FVector> UAuraAbilitySystemLibrary::EvenlyRotatedVectors(
+	const FVector& Forward, const FVector& Axis, float Spread, int32 NumVectors)
+{
+	TArray<FVector> Vectors;
+	if (NumVectors <= 0)
+	{
+		return Vectors;
+	}
+
+	if (NumVectors == 1)
+	{
+		Vectors.Add(Forward);
+		return Vectors;
+	}
+
+	const FVector LeftOfSpread = Forward.RotateAngleAxis(-Spread / 2.f, Axis);
+	const float DeltaSpread = Spread / (NumVectors - 1);
+	Vectors.Reserve(NumVectors);
+
+	for (int32 Index = 0; Index < NumVectors; ++Index)
+	{
+		Vectors.Add(LeftOfSpread.RotateAngleAxis(DeltaSpread * Index, Axis));
+	}
+
+	return Vectors;
+}

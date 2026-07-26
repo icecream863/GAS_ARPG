@@ -49,6 +49,40 @@ void UAuraDamageGameplayAbility::CauseDamage(AActor* TargetActor)
 	UAuraAbilitySystemLibrary::ApplyDamageEffect(MakeDamageEffectParamsFromClassDefaults(TargetActor));
 }
 
+float UAuraDamageGameplayAbility::GetDamageAtLevel() const
+{
+	return Damage.GetValueAtLevel(GetAbilityLevel());
+}
+
+void UAuraDamageGameplayAbility::CauseDamageWithoutDebuff(AActor* TargetActor)
+{
+	UAbilitySystemComponent* SourceASC = GetAbilitySystemComponentFromActorInfo();
+	UAbilitySystemComponent* TargetASC = UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(TargetActor);
+	if (!IsValid(SourceASC) || !IsValid(TargetASC) || !DamageEffectClass || !DamageType.IsValid())
+	{
+		return;
+	}
+
+	FGameplayEffectContextHandle EffectContextHandle = SourceASC->MakeEffectContext();
+	EffectContextHandle.AddSourceObject(this);
+
+	const FGameplayEffectSpecHandle SpecHandle = SourceASC->MakeOutgoingSpec(
+		DamageEffectClass,
+		GetAbilityLevel(),
+		EffectContextHandle);
+	if (!SpecHandle.IsValid())
+	{
+		return;
+	}
+
+	// 持续电击只传入伤害类型和当前等级的伤害值；不设置 Debuff 的 SetByCaller 数据。
+	UAbilitySystemBlueprintLibrary::AssignTagSetByCallerMagnitude(
+		SpecHandle,
+		DamageType,
+		GetDamageAtLevel());
+	TargetASC->ApplyGameplayEffectSpecToSelf(*SpecHandle.Data.Get());
+}
+
 FTaggedMontage UAuraDamageGameplayAbility::GetRandomTaggedMontageFromArray(
 	const TArray<FTaggedMontage>& TaggedMontages)
 {

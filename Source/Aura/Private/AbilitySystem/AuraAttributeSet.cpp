@@ -81,6 +81,7 @@ void UAuraAttributeSet::GetLifetimeReplicatedProps(TArray<class FLifetimePropert
 	DOREPLIFETIME_CONDITION_NOTIFY(UAuraAttributeSet, LightningResistance, COND_None, REPNOTIFY_Always);
 	DOREPLIFETIME_CONDITION_NOTIFY(UAuraAttributeSet, ArcaneResistance, COND_None, REPNOTIFY_Always);
 	DOREPLIFETIME_CONDITION_NOTIFY(UAuraAttributeSet, PhysicalResistance, COND_None, REPNOTIFY_Always);
+	
 }
 
 
@@ -202,9 +203,16 @@ void UAuraAttributeSet::HandleIncomingDamage(const FEffectProperties& Props)
 			Props.TargetCharacter->LaunchCharacter(KnockbackForce, true, true);
 		}
 
-		FGameplayTagContainer TagContainer;
-		TagContainer.AddTag(FAuraGameplayTags::Get().Effect_HitReact);
-		Props.TargetASC->TryActivateAbilitiesByTag(TagContainer);
+		const bool bIsBeingShocked = Props.TargetAvatarActor &&
+			Props.TargetAvatarActor->Implements<UCombatInterface>() &&
+			ICombatInterface::Execute_IsBeingShocked(Props.TargetAvatarActor);
+		if (!bIsBeingShocked)
+		{
+			// 持续电击每秒结算十次；ShockLoop 已提供受击表现，不再重复触发 HitReact。
+			FGameplayTagContainer TagContainer;
+			TagContainer.AddTag(FAuraGameplayTags::Get().Effect_HitReact);
+			Props.TargetASC->TryActivateAbilitiesByTag(TagContainer);
+		}
 	}
 
 	const bool bIsBlockedHit = UAuraAbilitySystemLibrary::IsBlockedHit(Props.EffectContextHandle);
@@ -297,7 +305,11 @@ void UAuraAttributeSet::Debuff(const FEffectProperties& Props)
 	const float DebuffDamage = UAuraAbilitySystemLibrary::GetDebuffDamage(Props.EffectContextHandle);
 	const float DebuffDuration = UAuraAbilitySystemLibrary::GetDebuffDuration(Props.EffectContextHandle);
 	const float DebuffFrequency = UAuraAbilitySystemLibrary::GetDebuffFrequency(Props.EffectContextHandle);
-	if (DebuffDuration <= 0.f || DebuffFrequency <= 0.f)
+	if (DebuffDuration <= 0.f)
+	{
+		return;
+	}
+	if (!FMath::IsNearlyZero(DebuffDamage) && DebuffFrequency <= 0.f)
 	{
 		return;
 	}
@@ -309,25 +321,40 @@ void UAuraAttributeSet::Debuff(const FEffectProperties& Props)
 	const FString DebuffName = FString::Printf(TEXT("DynamicDebuff_%s"), *DamageType.ToString());
 	UGameplayEffect* Effect = NewObject<UGameplayEffect>(GetTransientPackage(), FName(*DebuffName));
 	Effect->DurationPolicy = EGameplayEffectDurationType::HasDuration;
-	Effect->Period = DebuffFrequency;
 	Effect->DurationMagnitude = FScalableFloat(DebuffDuration);
+	
 	FInheritedTagContainer GrantedTags;
 	GrantedTags.AddTag(*DebuffTag);
+	if (DebuffTag->MatchesTagExact(GameplayTags.Debuff_Stun))
+	{
+		// 服务端的动态 Stun GE 直接阻断全部玩家输入；客户端通过 bIsStunned RepNotify 镜像这些标签。
+		// 阻挡的实现 写在 PlayerController::InputComponent 里，所有输入事件都会先检查这些标签。
+		// 动态ge只在服务端，不会复制到ge，因次要在 客户端的bIsStunned RepNotify里镜像这些标签，保证客户端的输入也被阻断。
+		GrantedTags.AddTag(GameplayTags.Player_Block_CursorTrace);
+		GrantedTags.AddTag(GameplayTags.Player_Block_InputPressed);
+		GrantedTags.AddTag(GameplayTags.Player_Block_InputHeld);
+		GrantedTags.AddTag(GameplayTags.Player_Block_InputReleased);
+	}
 	Effect->FindOrAddComponent<UTargetTagsGameplayEffectComponent>().SetAndApplyTargetTagChanges(GrantedTags);
-	// UE 5.8 exposes SetStackingType only under WITH_EDITOR, so runtime-created effects
-	// must still assign the deprecated public property.
+
+	// 在 UE 5.8 里，SetStackingType 这个接口被 WITH_EDITOR 限制了，
+	// 运行时动态创建 GameplayEffect 时不能正常调用，所以代码只能临时直接写旧字段：
 	PRAGMA_DISABLE_DEPRECATION_WARNINGS
 	Effect->StackingType = EGameplayEffectStackingType::AggregateBySource;
 	PRAGMA_ENABLE_DEPRECATION_WARNINGS
 	Effect->StackLimitCount = 1;
 
-	FGameplayModifierInfo& ModifierInfo = Effect->Modifiers.AddDefaulted_GetRef();
-	ModifierInfo.ModifierMagnitude = FScalableFloat(DebuffDamage);
-	ModifierInfo.ModifierOp = EGameplayModOp::Additive;
-	ModifierInfo.Attribute = GetIncomingDamageAttribute();
+	if (!FMath::IsNearlyZero(DebuffDamage))
+	{
+		Effect->Period = DebuffFrequency;
+		FGameplayModifierInfo& ModifierInfo = Effect->Modifiers.AddDefaulted_GetRef();
+		ModifierInfo.ModifierMagnitude = FScalableFloat(DebuffDamage);
+		ModifierInfo.ModifierOp = EGameplayModOp::Additive;
+		ModifierInfo.Attribute = GetIncomingDamageAttribute();
+	}
 
-	// ApplyGameplayEffectSpecToSelf copies the spec into the target ASC, so a local spec
-	// is sufficient and avoids allocating an unmanaged FGameplayEffectSpec with new.
+
+	// 这个接口会把 spec 拷贝进目标 ASC，所以用局部变量就够了，不用 new 一个长期对象。
 	const FGameplayEffectSpec DebuffSpec(Effect, EffectContext, 1.f);
 	Props.TargetASC->ApplyGameplayEffectSpecToSelf(DebuffSpec);
 }

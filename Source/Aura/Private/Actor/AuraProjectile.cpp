@@ -11,13 +11,15 @@
 #include "Components/AudioComponent.h"
 #include "Components/SphereComponent.h"
 #include "GameFramework/ProjectileMovementComponent.h"
+#include "Interaction/CombatInterface.h"
 #include "Kismet/GameplayStatics.h"
 
 AAuraProjectile::AAuraProjectile()
 {
 	//SetReplicates(true);
 	//上面更好,但是要 初始化完成后才用
- 	bReplicates = true;
+	bReplicates = true;
+	SetReplicateMovement(true);
 	//发射火球只在服务端执行，客户端通过火球开启复制来出现火球
 	PrimaryActorTick.bCanEverTick = false;
 
@@ -46,7 +48,73 @@ void AAuraProjectile::BeginPlay()
 	SetLifeSpan(LifeSpan);
 	Sphere->OnComponentBeginOverlap.AddDynamic(this, &ThisClass::OnSphereOverlap);
 	
-	 LoopingSoundComponent = UGameplayStatics::SpawnSoundAttached(LoopingSound, GetRootComponent());
+	LoopingSoundComponent = UGameplayStatics::SpawnSoundAttached(LoopingSound, GetRootComponent());
+}
+
+void AAuraProjectile::SetHomingTarget(AActor* Target)
+{
+	UnbindHomingTarget();
+
+	if (!HasAuthority() || !IsValid(Target))
+	{
+		return;
+	}
+
+	HomingTargetActor = Target;
+	if (ICombatInterface* CombatInterface = Cast<ICombatInterface>(Target))
+	{
+		FOnDeath& OnDeath = CombatInterface->GetOnDeathDelegate();
+		if (!OnDeath.IsAlreadyBound(this, &AAuraProjectile::OnHomingTargetDied))
+		{
+			OnDeath.AddDynamic(this, &AAuraProjectile::OnHomingTargetDied);
+		}
+	}
+
+	// 某些 Actor 可能不经过 CombatInterface::Die，而是被关卡逻辑直接销毁。
+	if (!Target->OnDestroyed.IsAlreadyBound(this, &AAuraProjectile::OnHomingTargetDestroyed))
+	{
+		Target->OnDestroyed.AddDynamic(this, &AAuraProjectile::OnHomingTargetDestroyed);
+	}
+}
+
+void AAuraProjectile::OnHomingTargetDied(AActor* DeadActor)
+{
+	DetonateWhenHomingTargetIsLost();
+}
+
+void AAuraProjectile::OnHomingTargetDestroyed(AActor* DestroyedActor)
+{
+	DetonateWhenHomingTargetIsLost();
+}
+
+void AAuraProjectile::DetonateWhenHomingTargetIsLost()
+{
+	// 正常命中会先执行 OnHit 并把 bHit 置为 true，目标随后死亡时不能再次触发爆炸。
+	if (!HasAuthority() || bHit || IsActorBeingDestroyed())
+	{
+		return;
+	}
+
+	OnHit();
+	Destroy();
+}
+
+void AAuraProjectile::UnbindHomingTarget()
+{
+	AActor* Target = HomingTargetActor.Get();
+	if (!IsValid(Target))
+	{
+		HomingTargetActor.Reset();
+		return;
+	}
+
+	if (ICombatInterface* CombatInterface = Cast<ICombatInterface>(Target))
+	{
+		CombatInterface->GetOnDeathDelegate().RemoveDynamic(this, &AAuraProjectile::OnHomingTargetDied);
+	}
+
+	Target->OnDestroyed.RemoveDynamic(this, &AAuraProjectile::OnHomingTargetDestroyed);
+	HomingTargetActor.Reset();
 }
 
 /**
@@ -56,6 +124,15 @@ void AAuraProjectile::BeginPlay()
  */
 void AAuraProjectile::Destroyed()
 {
+	UnbindHomingTarget();
+
+	if (LoopingSoundComponent)
+	{
+		LoopingSoundComponent->Stop();
+		LoopingSoundComponent->DestroyComponent();
+		LoopingSoundComponent = nullptr;
+	}
+
 	// 仅为尚未处理命中反馈的客户端补播；服务器的命中逻辑已在 OnSphereOverlap 中执行。
 	if (!bHit && !HasAuthority())
 	{
@@ -70,7 +147,12 @@ void AAuraProjectile::OnHit()
 	// 只处理当前机器上的命中表现；伤害始终由服务器在 OnSphereOverlap 中结算。
 	UGameplayStatics::PlaySoundAtLocation(this, ImpactSound, GetActorLocation());
 	UNiagaraFunctionLibrary::SpawnSystemAtLocation(this, ImpactEffect, GetActorLocation());
-	if (LoopingSoundComponent) LoopingSoundComponent->Stop();
+	if (LoopingSoundComponent)
+	{
+		LoopingSoundComponent->Stop();
+		LoopingSoundComponent->DestroyComponent();
+		LoopingSoundComponent = nullptr;
+	}
 	// 防止本地重叠回调与 Destroyed 兜底重复播放命中反馈。
 	bHit = true;
 }

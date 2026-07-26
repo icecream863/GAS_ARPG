@@ -3,6 +3,7 @@
 
 #include "AbilitySystem/AbilityTasks/TargetDataUnderMouse.h"
 
+#include "Aura/Aura.h"
 #include "AbilitySystemComponent.h"
 
 UTargetDataUnderMouse* UTargetDataUnderMouse::CreateTargetDataUnderMouse(UGameplayAbility* OwningAbility)
@@ -56,7 +57,8 @@ void UTargetDataUnderMouse::SendMouseCursorData()
 	FGameplayAbilityTargetData_SingleTargetHit* CachedData = new FGameplayAbilityTargetData_SingleTargetHit();
 	FHitResult CursorResult;
 	APlayerController* PC = Ability->GetCurrentActorInfo()->PlayerController.Get();
-	PC->GetHitResultUnderCursor(ECC_Visibility, false, CursorResult);
+	// 技能取点与鼠标悬停使用不同通道，避免 UI/可见性碰撞规则意外截断技能目标射线。
+	PC->GetHitResultUnderCursor(ECC_Target, false, CursorResult);
 	
 	CachedData->HitResult = CursorResult;
 	FGameplayAbilityTargetDataHandle DataHandle;

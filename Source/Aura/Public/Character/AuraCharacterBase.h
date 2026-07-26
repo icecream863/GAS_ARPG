@@ -15,6 +15,7 @@ class UAbilitySystemComponent;
 class UAttributeSet;
 class UGameplayEffect;
 class UDebuffNiagaraComponent;
+class FLifetimeProperty;
 
 UCLASS(Abstract)// 不会作为实例
 class AURA_API AAuraCharacterBase : public ACharacter, public IAbilitySystemInterface, public ICombatInterface
@@ -35,11 +36,25 @@ public:
 	UAttributeSet* GetAttributeSet() const{ return AttributeSet; }
 	
 	virtual void BeginPlay() override;
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
+	/** 由服务端 Debuff.Stun 标签驱动，并复制给客户端供动画与本地输入状态使用。 */
+	UPROPERTY(BlueprintReadOnly, ReplicatedUsing = OnRep_Stunned, Category = "Combat")
+	bool bIsStunned = false;
+
+	/** Burn 动态 GE 不复制给客户端，因此复制一个轻量状态驱动客户端特效。 */
+	UPROPERTY(BlueprintReadOnly, ReplicatedUsing = OnRep_Burned, Category = "Combat")
+	bool bIsBurned = false;
+
+	/** Electrocute 持续阶段使用；用于播放 ShockLoop 并抑制高频 HitReact。 */
+	UPROPERTY(BlueprintReadOnly, Replicated, Category = "Combat")
+	bool bIsBeingShocked = false;
 	
 	/** CombatInterface */
 	virtual void Die(const FVector& DeathImpulse) override;
 	virtual UAnimMontage* GetHitReactMontage_Implementation() override;
 	virtual FVector GetCombatSocketLocation_Implementation(const FGameplayTag& MontageTag) override;
+	virtual USkeletalMeshComponent* GetWeapon_Implementation() override;
 	virtual bool IsDead_Implementation() const override;
 	virtual AActor* GetAvatar_Implementation()  override;
 	virtual TArray<FTaggedMontage> GetAttackMontages_Implementation() override;
@@ -51,6 +66,8 @@ public:
 	virtual FOnExternalGameplayModifierDependencyChange* GetExternalGameplayModifierDependencyMulticast() override;
 	virtual FOnASCRegistered& GetOnASCRegisteredDelegate() override;
 	virtual FOnDeath& GetOnDeathDelegate() override;
+	virtual bool IsBeingShocked_Implementation() const override;
+	virtual void SetIsBeingShocked_Implementation(bool bInShock) override;
 	/** End CombatInterface */
 	
 	
@@ -94,6 +111,23 @@ public:
 	 */
 	
 protected:
+	/** 角色解除 HitReact/Stun 后恢复的移动速度；敌人可在构造函数或蓝图默认值中覆写。 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Combat")
+	float BaseWalkSpeed = 600.f;
+
+	/** 在子类完成 ASC 初始化后调用，避免依赖 Super::InitAbilityActorInfo 的调用顺序。 */
+	void RegisterDebuffTagEvents();
+
+	virtual void StunTagChanged(const FGameplayTag CallbackTag, int32 NewCount);
+	virtual void BurnTagChanged(const FGameplayTag CallbackTag, int32 NewCount);
+
+	UFUNCTION()
+	virtual void OnRep_Stunned();
+
+	UFUNCTION()
+	virtual void OnRep_Burned();
+
+	void ApplyStunMovementState();
 	
 	/*  Combat */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Combat")
@@ -138,6 +172,9 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Debuff")
 	TObjectPtr<UDebuffNiagaraComponent> BurnDebuffComponent;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Debuff")
+	TObjectPtr<UDebuffNiagaraComponent> StunDebuffComponent;
 	
 	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category = "Attributes")
 	TSubclassOf<UGameplayEffect> DefaultPrimaryAttributes;

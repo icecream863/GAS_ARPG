@@ -24,6 +24,20 @@ class AURA_API UAuraDamageGameplayAbility : public UAuraGameplayAbility
 public:
 	UFUNCTION(BlueprintCallable)
 	void CauseDamage(AActor* TargetActor); 
+
+	/**
+	 * 返回当前技能等级在 Damage 曲线上的伤害值。
+	 * Blueprint 不直接读取受保护的 Damage 属性，避免每个技能重复曲线查询逻辑。
+	 */
+	UFUNCTION(BlueprintPure, Category = "Damage")
+	float GetDamageAtLevel() const;
+
+	/**
+	 * 只写入 DamageType 对应的 SetByCaller 数值并施加伤害。
+	 * 持续施法的每一跳使用它，避免提前附带最终松键才需要的 Debuff 参数。
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Damage")
+	void CauseDamageWithoutDebuff(AActor* TargetActor);
 	
 protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
