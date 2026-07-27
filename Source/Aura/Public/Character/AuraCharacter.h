@@ -10,6 +10,8 @@
 
 class UCameraComponent;
 class UNiagaraComponent;
+class UPassiveNiagaraComponent;
+class USceneComponent;
 /**
  * 
  */
@@ -52,6 +54,19 @@ public:
 	
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Niagara")
 	TObjectPtr<UNiagaraComponent> LevelUpNiagaraComponent;
+
+	// 【优化】三个被动特效属于玩家技能，只放在 AAuraCharacter，避免所有敌人都创建无用组件。
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Passive Ability")
+	TObjectPtr<USceneComponent> PassiveEffectAttachComponent;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Passive Ability")
+	TObjectPtr<UPassiveNiagaraComponent> HaloOfProtectionNiagaraComponent;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Passive Ability")
+	TObjectPtr<UPassiveNiagaraComponent> LifeSiphonNiagaraComponent;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Passive Ability")
+	TObjectPtr<UPassiveNiagaraComponent> ManaSiphonNiagaraComponent;
 	
 	
 	

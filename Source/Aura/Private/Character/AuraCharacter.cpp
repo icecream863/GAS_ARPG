@@ -7,11 +7,14 @@
 #include "AuraGameplayTags.h"
 #include "NiagaraComponent.h"
 #include "AbilitySystem/AuraAbilitySystemComponent.h"
+#include "AbilitySystem/Passive/PassiveNiagaraComponent.h"
 #include "Camera/CameraComponent.h"
+#include "Components/SceneComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Player/AuraPlayerController.h"
 #include "Player/AuraPlayerState.h"
 #include "UI/HUD/AuraHUD.h"
+#include "UObject/ConstructorHelpers.h"
 
 AAuraCharacter::AAuraCharacter()
 {
@@ -28,6 +31,50 @@ AAuraCharacter::AAuraCharacter()
 	LevelUpNiagaraComponent = CreateDefaultSubobject<UNiagaraComponent>("LevelUpNiagaraComponent");
 	LevelUpNiagaraComponent->SetupAttachment(GetRootComponent());
 	LevelUpNiagaraComponent->bAutoActivate = false;
+
+	PassiveEffectAttachComponent = CreateDefaultSubobject<USceneComponent>("PassiveEffectAttachComponent");
+	PassiveEffectAttachComponent->SetupAttachment(GetRootComponent());
+	// 【优化】使用绝对旋转代替课程中的每帧 SetWorldRotation，避免仅为三个特效永久开启角色 Tick。
+	PassiveEffectAttachComponent->SetUsingAbsoluteRotation(true);
+
+	HaloOfProtectionNiagaraComponent = CreateDefaultSubobject<UPassiveNiagaraComponent>(
+		"HaloOfProtectionNiagaraComponent");
+	HaloOfProtectionNiagaraComponent->SetupAttachment(PassiveEffectAttachComponent);
+	HaloOfProtectionNiagaraComponent->PassiveSpellTag =
+		FAuraGameplayTags::Get().Abilities_Passive_HaloOfProtection;
+
+	LifeSiphonNiagaraComponent = CreateDefaultSubobject<UPassiveNiagaraComponent>(
+		"LifeSiphonNiagaraComponent");
+	LifeSiphonNiagaraComponent->SetupAttachment(PassiveEffectAttachComponent);
+	LifeSiphonNiagaraComponent->PassiveSpellTag =
+		FAuraGameplayTags::Get().Abilities_Passive_LifeSiphon;
+
+	ManaSiphonNiagaraComponent = CreateDefaultSubobject<UPassiveNiagaraComponent>(
+		"ManaSiphonNiagaraComponent");
+	ManaSiphonNiagaraComponent->SetupAttachment(PassiveEffectAttachComponent);
+	ManaSiphonNiagaraComponent->PassiveSpellTag =
+		FAuraGameplayTags::Get().Abilities_Passive_ManaSiphon;
+
+	// 【优化】标签和固定资产在 C++ 统一配置，三个角色蓝图组件无需再分别填写 Class Defaults。
+	static ConstructorHelpers::FObjectFinder<UNiagaraSystem> HaloSystem(
+		TEXT("/Game/Assets/Effects/Stun/NS_Halo.NS_Halo"));
+	static ConstructorHelpers::FObjectFinder<UNiagaraSystem> LifeSiphonSystem(
+		TEXT("/Game/Assets/Effects/Stun/NS_LifeSiphon.NS_LifeSiphon"));
+	static ConstructorHelpers::FObjectFinder<UNiagaraSystem> ManaSiphonSystem(
+		TEXT("/Game/Assets/Effects/Stun/NS_ManaSiphon.NS_ManaSiphon"));
+
+	if (HaloSystem.Succeeded())
+	{
+		HaloOfProtectionNiagaraComponent->SetAsset(HaloSystem.Object);
+	}
+	if (LifeSiphonSystem.Succeeded())
+	{
+		LifeSiphonNiagaraComponent->SetAsset(LifeSiphonSystem.Object);
+	}
+	if (ManaSiphonSystem.Succeeded())
+	{
+		ManaSiphonNiagaraComponent->SetAsset(ManaSiphonSystem.Object);
+	}
 	
 	
 	GetCharacterMovement()->bOrientRotationToMovement = true;

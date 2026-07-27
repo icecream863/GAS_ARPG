@@ -12,6 +12,8 @@ DECLARE_MULTICAST_DELEGATE(FAbilityGiven);
 DECLARE_DELEGATE_OneParam(FForEachAbility, FGameplayAbilitySpec&);
 DECLARE_MULTICAST_DELEGATE_ThreeParams(FAbilityStatusChanged,const FGameplayTag&/* Ability Tag */,const FGameplayTag& /* Status Tag */, int32 /* Level */);
 DECLARE_MULTICAST_DELEGATE_FourParams(FAbilityEquipped, const FGameplayTag& /* Ability Tag */, const FGameplayTag& /* Status Tag */, const FGameplayTag& /* Slot */, const FGameplayTag& /* Previous Slot */);
+DECLARE_MULTICAST_DELEGATE_OneParam(FDeactivatePassiveAbility, const FGameplayTag& /* Ability Tag */);
+DECLARE_MULTICAST_DELEGATE_TwoParams(FActivatePassiveEffect, const FGameplayTag& /* Ability Tag */, bool /* bActivate */);
 
 /**
  *
@@ -40,6 +42,10 @@ public:
 	FAbilityGiven AbilityGivenDelegate; // ~-当角色被授予能力时广播，常用于 UI 监听角色能力变化。
 	FAbilityStatusChanged AbilityStatusChanged;
 	FAbilityEquipped AbilityEquipped;
+	/** 广播需要停用的被动技能标签；对应的被动 Ability 自己判断并结束。 */
+	FDeactivatePassiveAbility DeactivatePassiveAbility;
+	/** 每个网络端本地广播，被动 Niagara 组件按 AbilityTag 选择性响应。 */
+	FActivatePassiveEffect ActivatePassiveEffect;
 
 	bool bStartupAbilitiesGiven = false; // 避免先广播再绑定。
 
@@ -90,7 +96,7 @@ public:
 	static FGameplayTag GetStatusFromSpec(const FGameplayAbilitySpec& AbilitySpec);
 	FGameplayAbilitySpec* GetAbilitySpecFromTag(const FGameplayTag& Tag);
 	FGameplayTag GetStatusFromAbilityTag(const FGameplayTag& AbilityTag);
-	FGameplayTag GetInputTagFromAbilityTag(const FGameplayTag& AbilityTag);
+	FGameplayTag GetSlotFromAbilityTag(const FGameplayTag& AbilityTag);
 
 	bool GetDescriptionByAbilityTag(const FGameplayTag& AbilityTag, FString& OutDescription,  FString& OutNextLevelDescription);
 
@@ -115,9 +121,17 @@ public:
 	UFUNCTION(Client, Reliable)
 	void ClientEquipAbility(const FGameplayTag& AbilityTag, const FGameplayTag& Status, const FGameplayTag& Slot, const FGameplayTag& PreviousSlot);
 
+	// 【优化】课程使用 Unreliable；持续特效一旦丢失关闭消息就会永久残留，装备操作频率低，因此改用 Reliable。
+	UFUNCTION(NetMulticast, Reliable)
+	void MulticastActivatePassiveEffect(const FGameplayTag& AbilityTag, bool bActivate);
+
 private:
-	static bool AbilityHasSlot(FGameplayAbilitySpec* Spec, const FGameplayTag& Slot);
-	void ClearSlot(FGameplayAbilitySpec* Spec);
-	void ClearAbilitiesOfSlot(const FGameplayTag& Slot);
+	static bool AbilityHasSlot(const FGameplayAbilitySpec& Spec, const FGameplayTag& Slot);
+	static bool AbilityHasAnySlot(const FGameplayAbilitySpec& Spec);
+	bool SlotIsEmpty(const FGameplayTag& Slot);
+	FGameplayAbilitySpec* GetSpecWithSlot(const FGameplayTag& Slot);
+	static bool IsPassiveAbility(const FGameplayAbilitySpec& Spec);
+	static void ClearSlot(FGameplayAbilitySpec& Spec);
+	static void AssignSlotToAbility(FGameplayAbilitySpec& Spec, const FGameplayTag& Slot);
 
 };
