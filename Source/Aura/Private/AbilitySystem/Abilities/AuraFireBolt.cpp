@@ -53,22 +53,30 @@ void UAuraFireBolt::SpawnProjectiles(const FVector& ProjectileTargetLocation, co
 
 		Projectile->DamageEffectParams = MakeDamageEffectParamsFromClassDefaults();
 
-		if (IsValid(HomingTarget) && HomingTarget->Implements<UCombatInterface>())
+		const bool bHasActorHomingTarget =
+			IsValid(HomingTarget) && HomingTarget->Implements<UCombatInterface>();
+		const bool bCanHomeToActor = bHasActorHomingTarget &&
+			HomingTarget != AvatarActor;
+
+		if (bCanHomeToActor)
 		{
 			Projectile->ProjectileMovement->HomingTargetComponent = HomingTarget->GetRootComponent();
 			Projectile->SetHomingTarget(HomingTarget);
 		}
-		else
+		else if (!bHasActorHomingTarget)
 		{
 			// 世界几何的根组件位置通常不是鼠标命中点，因此创建一个位于点击位置的虚拟追踪目标。
 			Projectile->HomingTargetSceneComponent = NewObject<USceneComponent>(Projectile);
 			Projectile->HomingTargetSceneComponent->SetWorldLocation(ProjectileTargetLocation);
 			Projectile->ProjectileMovement->HomingTargetComponent = Projectile->HomingTargetSceneComponent;
 		}
+		// 【优化】只禁止追踪施法者自己；其他战斗 Actor（包括友军）都允许成为目标。
+		// 自身目标保留初始发射方向但不设置 HomingTarget，避免火球持续追进施法者体内。
 
 		Projectile->ProjectileMovement->HomingAccelerationMagnitude =
 			FMath::FRandRange(HomingAccelerationMin, HomingAccelerationMax);
-		Projectile->ProjectileMovement->bIsHomingProjectile = bLaunchHomingProjectiles;
+		Projectile->ProjectileMovement->bIsHomingProjectile =
+			bLaunchHomingProjectiles && (!bHasActorHomingTarget || bCanHomeToActor);
 		Projectile->FinishSpawning(SpawnTransform);
 	}
 }

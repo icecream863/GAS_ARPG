@@ -29,6 +29,8 @@ AAuraProjectile::AAuraProjectile()
 	Sphere->SetCollisionObjectType(ECC_Projectile);
 	
 	Sphere->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+	// OnSphereOverlap 是伤害与销毁的唯一入口，明确开启重叠事件，避免依赖组件默认值。
+	Sphere->SetGenerateOverlapEvents(true);
 	Sphere->SetCollisionResponseToAllChannels(ECR_Ignore);
 	Sphere->SetCollisionResponseToChannel(ECC_WorldStatic, ECR_Overlap);
 	Sphere->SetCollisionResponseToChannel(ECC_WorldDynamic, ECR_Ignore);
@@ -162,14 +164,24 @@ void AAuraProjectile::OnSphereOverlap(UPrimitiveComponent* OverlappedComponent, 
 {
 	AActor* SourceAvatarActor = DamageEffectParams.SourceAbilitySystemComponent ?
 	DamageEffectParams.SourceAbilitySystemComponent->GetAvatarActor() : nullptr;
-	if (!SourceAvatarActor || SourceAvatarActor == OtherActor)
+	if (!SourceAvatarActor)
 	{
-		return; // 没有有效的伤害来源，或投射物碰到了施法者自己。
+		return; // 没有有效的伤害来源，无法进行阵营判断或伤害结算。
 	}
-	
-	if (!UAuraAbilitySystemLibrary::IsNotFriend(SourceAvatarActor, OtherActor))
+
+	if (SourceAvatarActor == OtherActor)
 	{
-		return; // 友方目标不触发命中。
+		// 只忽略施法者自己；友军与敌军都会继续进入下方的伤害结算，实现投射物友伤。
+		// 防御性兜底：若其他生成入口错误地把自己设为真实追踪目标，则无伤害引爆，避免永久滞留。
+		if (HasAuthority() && HomingTargetActor.Get() == OtherActor)
+		{
+			if (!bHit)
+			{
+				OnHit();
+			}
+			Destroy();
+		}
+		return;
 	}
 	
 	// 每个网络实例只播放一次本地命中反馈。

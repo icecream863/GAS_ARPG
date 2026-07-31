@@ -1,0 +1,149 @@
+#include "UI/ViewModel/MVVMLoadScreen.h"
+
+#include "Game/AuraGameModeBase.h"
+#include "Game/LoadScreenSaveGame.h"
+#include "Kismet/GameplayStatics.h"
+#include "UI/ViewModel/MVVMLoadSlot.h"
+
+void UMVVMLoadScreen::InitializeLoadSlots()
+{
+	checkf(LoadSlotViewModelClass, TEXT("BP_LoadScreenViewModel 未设置 LoadSlotViewModelClass"));
+
+	LoadSlots.Empty(NumLoadSlots);
+	for (int32 Index = 0; Index < NumLoadSlots; ++Index)
+	{
+		UMVVMLoadSlot* LoadSlot = NewObject<UMVVMLoadSlot>(this, LoadSlotViewModelClass);
+		LoadSlot->SetLoadSlotName(FString::Printf(TEXT("LoadSlot_%d"), Index));
+		LoadSlot->SetSlotIndex(Index);
+		LoadSlots.Add(Index, LoadSlot);
+	}
+}
+
+void UMVVMLoadScreen::LoadData()
+{
+	AAuraGameModeBase* AuraGameMode = Cast<AAuraGameModeBase>(UGameplayStatics::GetGameMode(this));
+	if (!AuraGameMode)
+	{
+		return;
+	}
+
+	for (const TTuple<int32, TObjectPtr<UMVVMLoadSlot>>& LoadSlotPair : LoadSlots)
+	{
+		UMVVMLoadSlot* LoadSlot = LoadSlotPair.Value;
+		if (!LoadSlot)
+		{
+			continue;
+		}
+
+		ULoadScreenSaveGame* SaveObject = AuraGameMode->GetSaveSlotData(LoadSlot->GetLoadSlotName(), LoadSlot->GetSlotIndex());
+		LoadSlot->SetPlayerName(SaveObject->PlayerName);
+		LoadSlot->SetMapName(SaveObject->MapName);
+		LoadSlot->SetSlotStatus(SaveObject->SaveSlotStatus);
+		LoadSlot->InitializeSlot();
+	}
+}
+
+UMVVMLoadSlot* UMVVMLoadScreen::GetLoadSlotViewModelByIndex(const int32 Index) const
+{
+	const TObjectPtr<UMVVMLoadSlot>* FoundSlot = LoadSlots.Find(Index);
+	ensureMsgf(FoundSlot, TEXT("请求了不存在的存档槽索引：%d"), Index);
+	return FoundSlot ? FoundSlot->Get() : nullptr;
+}
+
+void UMVVMLoadScreen::SelectSlotButtonPressed(const int32 Slot)
+{
+	SelectedSlot = GetLoadSlotViewModelByIndex(Slot);
+	if (!SelectedSlot)
+	{
+		return;
+	}
+
+	// 只要能点击 Taken 槽位的 Select，就说明已经有有效槽位被选中。
+	SlotSelected.Broadcast();
+
+	for (const TTuple<int32, TObjectPtr<UMVVMLoadSlot>>& LoadSlotPair : LoadSlots)
+	{
+		if (!LoadSlotPair.Value)
+		{
+			continue;
+		}
+
+		// 被选中的槽位禁用按钮，其它 Taken 槽位重新启用，形成清晰的选中态。
+		const bool bEnableButton = LoadSlotPair.Key != Slot;
+		LoadSlotPair.Value->EnableSelectSlotButton.Broadcast(bEnableButton);
+	}
+}
+
+void UMVVMLoadScreen::NewGameButtonPressed(const int32 Slot)
+{
+	// 【优化】复用带边界检查的查询函数，避免课程中 Map 下标访问在索引错误时插入空元素。
+	if (UMVVMLoadSlot* LoadSlot = GetLoadSlotViewModelByIndex(Slot))
+	{
+		LoadSlot->SetSlotStatus(EnterName);
+		LoadSlot->InitializeSlot();
+	}
+}
+
+void UMVVMLoadScreen::NewSlotButtonPressed(const int32 Slot, const FString& EnteredName)
+{
+	UMVVMLoadSlot* LoadSlot = GetLoadSlotViewModelByIndex(Slot);
+	if (!LoadSlot)
+	{
+		return;
+	}
+
+	LoadSlot->SetPlayerName(EnteredName);
+	LoadSlot->SetSlotStatus(Taken);
+
+	if (AAuraGameModeBase* AuraGameMode = Cast<AAuraGameModeBase>(UGameplayStatics::GetGameMode(this)))
+	{
+		LoadSlot->SetMapName(AuraGameMode->GetDefaultMapName());
+		AuraGameMode->SaveSlotData(LoadSlot);
+	}
+
+	LoadSlot->InitializeSlot();
+}
+
+void UMVVMLoadScreen::PlayButtonPressed()
+{
+	if (!SelectedSlot)
+	{
+		return;
+	}
+
+	if (AAuraGameModeBase* AuraGameMode = Cast<AAuraGameModeBase>(UGameplayStatics::GetGameMode(this)))
+	{
+		AuraGameMode->TravelToMap(SelectedSlot);
+	}
+}
+
+void UMVVMLoadScreen::DeleteButtonPressed()
+{
+	if (!SelectedSlot)
+	{
+		return;
+	}
+
+	AAuraGameModeBase* AuraGameMode = Cast<AAuraGameModeBase>(UGameplayStatics::GetGameMode(this));
+	if (!AuraGameMode)
+	{
+		return;
+	}
+
+	AuraGameMode->DeleteSlot(SelectedSlot->GetLoadSlotName(), SelectedSlot->GetSlotIndex());
+
+	// 删除后把当前槽恢复为 Vacant，下一次创建新槽时再按正常流程变成 Taken。
+	SelectedSlot->SetPlayerName(TEXT("Default Name"));
+	SelectedSlot->SetMapName(FString());
+	SelectedSlot->SetSlotStatus(Vacant);
+	SelectedSlot->InitializeSlot();
+
+	// 【优化】提前把该槽的 Select 按钮恢复为可点击，避免再次创建 Taken 后沿用旧的禁用状态。
+	SelectedSlot->EnableSelectSlotButton.Broadcast(true);
+	SelectedSlot = nullptr;
+}
+
+void UMVVMLoadScreen::SetNumLoadSlots(const int32 InNumLoadSlots)
+{
+	UE_MVVM_SET_PROPERTY_VALUE(NumLoadSlots, FMath::Max(0, InNumLoadSlots));
+}
