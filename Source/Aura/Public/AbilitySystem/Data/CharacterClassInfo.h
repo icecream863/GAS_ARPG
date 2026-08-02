@@ -67,6 +67,13 @@ public:
 	
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Common Class DefaultInfo")
 	TSubclassOf<UGameplayEffect> SecondaryAttribute;
+
+	// 玩家读档后需要持续监听主属性变化并重新计算次级属性。
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Common Class DefaultInfo")
+	TSubclassOf<UGameplayEffect> SecondaryAttributesInfinite;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Common Class DefaultInfo")
+	TSubclassOf<UGameplayEffect> PrimaryAttributesSetByCaller;
 	
 	/** TSubclassOf<UGameplayAbility> = 技能类/蓝图（用来做配置、做模板，知道要生成什么）。
 	UGameplayAbility* = 技能实例（真正在游戏里释放和计算冷却的具体对象，通常挂在角色的技能系统组件 ASC 里）。*/

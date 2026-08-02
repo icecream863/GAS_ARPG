@@ -4,6 +4,7 @@
 
 #include "AbilitySystemBlueprintLibrary.h"
 #include "AbilitySystem/AuraAbilitySystemComponent.h"
+#include "AuraGameplayTags.h"
 #include "Interaction/CombatInterface.h"
 
 UPassiveNiagaraComponent::UPassiveNiagaraComponent()
@@ -28,7 +29,10 @@ void UPassiveNiagaraComponent::BeginPlay()
 			this,
 			[this](UAbilitySystemComponent* RegisteredASC)
 			{
-				RegisterWithASC(Cast<UAuraAbilitySystemComponent>(RegisteredASC));
+				UAuraAbilitySystemComponent* AuraASC = Cast<UAuraAbilitySystemComponent>(RegisteredASC);
+				RegisterWithASC(AuraASC);
+				// ASC 注册较晚时，可能错过了 AbilityGiven 广播，按状态补一次激活。
+				ActivateIfEquipped(AuraASC);
 			});
 	}
 
@@ -62,6 +66,23 @@ void UPassiveNiagaraComponent::RegisterWithASC(UAuraAbilitySystemComponent* Aura
 
 	// 【优化】课程只监听后续广播；这里注册时立即同步，避免 ASC/组件初始化较晚导致已激活特效不显示。
 	SyncWithASC();
+	ActivateIfEquipped(AuraASC);
+}
+
+void UPassiveNiagaraComponent::ActivateIfEquipped(UAuraAbilitySystemComponent* AuraASC)
+{
+	if (!AuraASC || !AuraASC->bStartupAbilitiesGiven || !PassiveSpellTag.IsValid())
+	{
+		return;
+	}
+
+	// 读档恢复被动技能时走的是 GiveAbilityAndActivateOnce，不会经过
+	// MulticastActivatePassiveEffect 广播；这里直接按“状态是否 Equipped”补一次激活。
+	if (AuraASC->GetStatusFromAbilityTag(PassiveSpellTag)
+			.MatchesTagExact(FAuraGameplayTags::Get().Abilities_Status_Equipped))
+	{
+		Activate();
+	}
 }
 
 void UPassiveNiagaraComponent::SyncWithASC()

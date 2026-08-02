@@ -56,4 +56,8 @@ public:
 	
 	UFUNCTION(BlueprintNativeEvent)
 	void AddToSpellPoints(int32 InSpellPoints);
+
+	/** 到达检查点时保存当前玩家进度。 */
+	UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
+	void SaveProgress(const FName& CheckpointTag);
 };

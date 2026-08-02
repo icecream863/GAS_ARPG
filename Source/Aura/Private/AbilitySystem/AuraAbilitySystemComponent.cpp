@@ -11,6 +11,7 @@
 #include "AbilitySystem/Abilities/AuraPassiveAbility.h"
 #include "AbilitySystem/Data/AbilityInfo.h"
 #include "Aura/AuraLogChannels.h"
+#include "Game/LoadScreenSaveGame.h"
 #include "Interaction/PlayerInterface.h"
 
 namespace
@@ -66,7 +67,7 @@ void UAuraAbilitySystemComponent::OnRep_ActivateAbilities()
 	{
 		bStartupAbilitiesGiven = true;
 		AbilityGivenDelegate.Broadcast();
-	}//只需要在第一次 添加技能时广播， 因为广播的是 ASC，
+	}//只需要在第一次 添加技能时广播
 }
 
 
@@ -159,9 +160,54 @@ void UAuraAbilitySystemComponent::AddPassiveCharacterAbility(const TArray<TSubcl
 	for (const TSubclassOf<UGameplayAbility> StartupAbility : StartupPassiveAbilities)
 	{
 		FGameplayAbilitySpec AbilitySpec = FGameplayAbilitySpec(StartupAbility, 1);
+		// 首次授予被动技能即视为 Equipped（已激活），这样存档/读档时状态一致，
+		// 被动 Niagara 组件也能按 Equipped 状态恢复显示。
+		AbilitySpec.GetDynamicSpecSourceTags().AddTag(FAuraGameplayTags::Get().Abilities_Status_Equipped);
 		GiveAbilityAndActivateOnce(AbilitySpec);
 	}
 
+}
+
+void UAuraAbilitySystemComponent::AddCharacterAbilitiesFromSaveData(ULoadScreenSaveGame* SaveData)
+{
+	if (!SaveData)
+	{
+		return;
+	}
+
+	for (const FSavedAbility& Data : SaveData->SavedAbilities)
+	{
+		const TSubclassOf<UGameplayAbility> LoadedAbilityClass = Data.GameplayAbility;
+		if (!LoadedAbilityClass)
+		{
+			continue;
+		}
+
+		// 用存档里的能力类和等级重建 Spec，并还原输入槽与状态标签。
+		FGameplayAbilitySpec LoadedAbilitySpec = FGameplayAbilitySpec(LoadedAbilityClass, Data.AbilityLevel);
+		LoadedAbilitySpec.GetDynamicSpecSourceTags().AddTag(Data.AbilitySlot);
+		LoadedAbilitySpec.GetDynamicSpecSourceTags().AddTag(Data.AbilityStatus);
+
+		if (Data.AbilityType.MatchesTagExact(FAuraGameplayTags::Get().Abilities_Type_Passive))
+		{
+			// 被动技能只有存档时是 Equipped 才激活，避免未装备的被动也被启动。
+			if (Data.AbilityStatus.MatchesTagExact(FAuraGameplayTags::Get().Abilities_Status_Equipped))
+			{
+				GiveAbilityAndActivateOnce(LoadedAbilitySpec);
+			}
+			else
+			{
+				GiveAbility(LoadedAbilitySpec);
+			}
+		}
+		else
+		{
+			GiveAbility(LoadedAbilitySpec);
+		}
+	}
+
+	bStartupAbilitiesGiven = true;
+	AbilityGivenDelegate.Broadcast();
 }
 
 void UAuraAbilitySystemComponent::UpgradeAttribute(const FGameplayTag& AttributeTag)
@@ -417,24 +463,24 @@ void UAuraAbilitySystemComponent::ServerEquipAbility_Implementation(const FGamep
 				}
 			}
 
-			if (!AbilityHasAnySlot(*AbilitySpec) && IsPassiveAbility(*AbilitySpec))
+			if (!AbilityHasAnySlot(*AbilitySpec))
 			{
-				// 被动技能第一次进入任意槽位时由服务器激活；换槽时保持原实例持续运行。
-				if (TryActivateAbility(AbilitySpec->Handle))
+				// 第一次装备（此前没有输入槽）：
+				// 被动技能由服务器激活；换槽时保持原实例持续运行，不再进入此分支。
+				if (IsPassiveAbility(*AbilitySpec))
 				{
-					MulticastActivatePassiveEffect(AbilityTag, true);
+					if (TryActivateAbility(AbilitySpec->Handle))
+					{
+						MulticastActivatePassiveEffect(AbilityTag, true);
+					}
 				}
-			}
-
-			AssignSlotToAbility(*AbilitySpec, Slot);
-
-			if (Status.MatchesTagExact(GameplayTags.Abilities_Status_Unlocked))
-			{
-				// 第一次装备时，把技能从 Unlocked 推进到 Equipped 状态。
-				AbilitySpec->GetDynamicSpecSourceTags().RemoveTag(GameplayTags.Abilities_Status_Unlocked);
+				// 先清掉旧状态标签再写 Equipped，保证保存时拿到的状态一定是 Equipped。
+				AbilitySpec->GetDynamicSpecSourceTags().RemoveTag(GetStatusFromSpec(*AbilitySpec));
 				AbilitySpec->GetDynamicSpecSourceTags().AddTag(GameplayTags.Abilities_Status_Equipped);
 				Status = GameplayTags.Abilities_Status_Equipped;
 			}
+
+			AssignSlotToAbility(*AbilitySpec, Slot);
 
 			MarkAbilitySpecDirty(*AbilitySpec);
 			ClientEquipAbility(AbilityTag, GameplayTags.Abilities_Status_Equipped, Slot, PreviousSlot);

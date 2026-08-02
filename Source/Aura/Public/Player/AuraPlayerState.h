@@ -12,6 +12,7 @@ class UAbilitySystemComponent;
 class UAttributeSet;
 
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnPlayerStateChanged, int32 /*State Value*/);
+DECLARE_MULTICAST_DELEGATE_TwoParams(FOnLevelChanged, int32 /*New Level*/, bool /*bLevelUp*/);
 
 /**
  * 
@@ -31,7 +32,7 @@ public:
 	UAttributeSet* GetAttributeSet() const{ return AttributeSet; }
 	
 	FOnPlayerStateChanged OnXPChangedDelegate;
-	FOnPlayerStateChanged OnLevelChangedDelegate;
+	FOnLevelChanged OnLevelChangedDelegate;
 	FOnPlayerStateChanged OnAttributePointsChangedDelegate;
 	FOnPlayerStateChanged OnSpellPointsChangedDelegate;
 	
@@ -43,6 +44,8 @@ public:
 	
 	void SetXP(const int32 InXP);
 	void SetLevel(const int32 InLevel);
+	void SetAttributePoints(const int32 InAttributePoints);
+	void SetSpellPoints(const int32 InSpellPoints);
 	
 	void AddToXP(const int32 InXP);
 	void AddToLevel(const int32 InLevel);
@@ -65,13 +68,13 @@ private:
 	int32 Level = 1;
 	
 	UPROPERTY(VisibleAnywhere, ReplicatedUsing = OnRep_XP)
-	int32 XP = 1; //这个才是真正的 XP，记录总经验值， incomingXP 是每次获得的经验值
+	int32 XP = 0; //这个才是真正的 XP，记录总经验值， incomingXP 是每次获得的经验值
 	
 	UPROPERTY(VisibleAnywhere, ReplicatedUsing = OnRep_AttributePoints)
 	int32 AttributePoints = 0;
 	
 	UPROPERTY(VisibleAnywhere, ReplicatedUsing = OnRep_SpellPoints)
-	int32 SpellPoints = 1;
+	int32 SpellPoints = 0;
 	
 	UFUNCTION()
 	void OnRep_Level(const int32 OldLevel);

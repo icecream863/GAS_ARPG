@@ -31,6 +31,8 @@ protected:
 
 private:
 	void RegisterWithASC(UAuraAbilitySystemComponent* AuraASC);
+	/** 若该被动技能状态为 Equipped 且起始能力已授予，直接激活 Niagara。 */
+	void ActivateIfEquipped(UAuraAbilitySystemComponent* AuraASC);
 	void SyncWithASC();
 	void OnPassiveActivate(const FGameplayTag& AbilityTag, bool bActivate);
 

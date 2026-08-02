@@ -32,7 +32,32 @@ public:
 
 	ULoadScreenSaveGame* GetSaveSlotData(const FString& SlotName, int32 SlotIndex) const;
 
+	/** 根据 GameInstance 当前槽位读取运行中的存档对象。 */
+	ULoadScreenSaveGame* RetrieveInGameSaveData() const;
+
+	/** 将运行中的存档对象写回当前 GameInstance 槽位，并同步出生点标签。 */
+	void SaveInGameProgressData(ULoadScreenSaveGame* SaveObject) const;
+
+	/**
+	 * 保存当前世界状态：遍历所有实现了 USaveInterface 的 Actor，
+	 * 序列化它们带 SaveGame 说明符的成员变量，按地图资产名写进存档。
+	 */
+	void SaveWorldState(UWorld* World) const;
+
+	/**
+	 * 加载当前世界状态：遍历实现了 USaveInterface 的 Actor，
+	 * 按 ActorName 匹配存档数据，反序列化变量并调用 LoadActor 恢复。
+	 */
+	void LoadWorldState(UWorld* World) const;
+
 	FString GetDefaultMapName() const { return DefaultMapName; }
+
+	// 新建角色首次进入默认地图时使用的 PlayerStart 标签；新建槽时写入 GameInstance。
+	UPROPERTY(EditDefaultsOnly, Category = "Load Screen")
+	FName DefaultPlayerStartTag;
+
+	// 【存档/读档】重写 ChoosePlayerStart，按 PlayerStartTag 选择出生点。
+	virtual AActor* ChoosePlayerStart_Implementation(AController* Player) override;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Character Class Defaults")
 	TObjectPtr<UCharacterClassInfo> CharacterClassInfo;

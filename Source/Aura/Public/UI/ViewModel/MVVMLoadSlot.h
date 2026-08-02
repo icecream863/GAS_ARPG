@@ -31,8 +31,14 @@ public:
 	void SetMapName(const FString& InMapName);
 	FString GetMapName() const { return MapName; }
 
+	void SetPlayerLevel(int32 InPlayerLevel);
+	int32 GetPlayerLevel() const { return PlayerLevel; }
+
 	void SetSlotStatus(ESaveSlotStatus InSlotStatus);
 	ESaveSlotStatus GetSlotStatus() const { return SlotStatus.GetValue(); }
+
+	void SetPlayerStartTag(const FName& InPlayerStartTag);
+	FName GetPlayerStartTag() const { return PlayerStartTag; }
 
 	/** WidgetSwitcher 在蓝图中订阅该委托，只处理视觉切换。 */
 	UPROPERTY(BlueprintAssignable, Category = "Load Screen")
@@ -59,7 +65,15 @@ private:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, FieldNotify, Setter, Getter, Category = "Load Screen", meta = (AllowPrivateAccess = "true"))
 	FString MapName;
 
+	/** Taken 槽位显示的玩家等级；新建槽为 1，读档时从存档对象恢复。 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, FieldNotify, Setter, Getter, Category = "Load Screen", meta = (AllowPrivateAccess = "true"))
+	int32 PlayerLevel = 1;
+
 	/** 当前槽位状态，数值直接对应 WidgetSwitcher 的页面索引。 */
 	UPROPERTY()
 	TEnumAsByte<ESaveSlotStatus> SlotStatus = Vacant;
+
+	// 新建槽/读档时写入的出生点标签；Play 时写进 GameInstance，供 GameMode::ChoosePlayerStart 使用。
+	UPROPERTY()
+	FName PlayerStartTag;
 };

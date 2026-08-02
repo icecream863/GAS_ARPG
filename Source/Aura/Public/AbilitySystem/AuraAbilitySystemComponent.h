@@ -7,6 +7,7 @@
 #include "AuraAbilitySystemComponent.generated.h"
 
 class UAuraAbilitySystemComponent;
+class ULoadScreenSaveGame;
 DECLARE_MULTICAST_DELEGATE_OneParam(FEffectAssetTags, FGameplayTagContainer& /*AssetTagContainer*/);
 DECLARE_MULTICAST_DELEGATE(FAbilityGiven);
 DECLARE_DELEGATE_OneParam(FForEachAbility, FGameplayAbilitySpec&);
@@ -72,6 +73,12 @@ public:
 	void AddCharacterAbility(const TArray<TSubclassOf<UGameplayAbility>>& StartupAbilities);
 
 	void AddPassiveCharacterAbility(const TArray<TSubclassOf<UGameplayAbility>>& StartupPassiveAbilities);
+
+	/**
+	 * 读档时按存档数据恢复能力：遍历 SavedAbilities，为每个技能重建 AbilitySpec
+	 * （还原等级、状态、槽位），被动技能只有存档状态为 Equipped 时才激活。
+	 */
+	void AddCharacterAbilitiesFromSaveData(ULoadScreenSaveGame* SaveData);
 
 	void UpgradeAttribute(const FGameplayTag& AttributeTag);
 

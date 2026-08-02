@@ -1,5 +1,6 @@
 #include "UI/ViewModel/MVVMLoadScreen.h"
 
+#include "Game/AuraGameInstance.h"
 #include "Game/AuraGameModeBase.h"
 #include "Game/LoadScreenSaveGame.h"
 #include "Kismet/GameplayStatics.h"
@@ -38,6 +39,8 @@ void UMVVMLoadScreen::LoadData()
 		ULoadScreenSaveGame* SaveObject = AuraGameMode->GetSaveSlotData(LoadSlot->GetLoadSlotName(), LoadSlot->GetSlotIndex());
 		LoadSlot->SetPlayerName(SaveObject->PlayerName);
 		LoadSlot->SetMapName(SaveObject->MapName);
+		LoadSlot->SetPlayerLevel(SaveObject->PlayerLevel);
+		LoadSlot->SetPlayerStartTag(SaveObject->PlayerStartTag);
 		LoadSlot->SetSlotStatus(SaveObject->SaveSlotStatus);
 		LoadSlot->InitializeSlot();
 	}
@@ -93,12 +96,23 @@ void UMVVMLoadScreen::NewSlotButtonPressed(const int32 Slot, const FString& Ente
 	}
 
 	LoadSlot->SetPlayerName(EnteredName);
+	// 新建槽固定从 1 级开始，和 SaveGame 的默认值保持一致。
+	LoadSlot->SetPlayerLevel(1);
 	LoadSlot->SetSlotStatus(Taken);
 
 	if (AAuraGameModeBase* AuraGameMode = Cast<AAuraGameModeBase>(UGameplayStatics::GetGameMode(this)))
 	{
 		LoadSlot->SetMapName(AuraGameMode->GetDefaultMapName());
+		LoadSlot->SetPlayerStartTag(AuraGameMode->DefaultPlayerStartTag);
 		AuraGameMode->SaveSlotData(LoadSlot);
+
+		// 新建槽即写入跨关卡持久数据：读档用的 Slot 名/索引，以及默认出生点标签。
+		if (UAuraGameInstance* AuraGameInstance = Cast<UAuraGameInstance>(UGameplayStatics::GetGameInstance(this)))
+		{
+			AuraGameInstance->LoadSlotName = LoadSlot->GetLoadSlotName();
+			AuraGameInstance->LoadSlotIndex = LoadSlot->GetSlotIndex();
+			AuraGameInstance->PlayerStartTag = AuraGameMode->DefaultPlayerStartTag;
+		}
 	}
 
 	LoadSlot->InitializeSlot();
@@ -113,6 +127,13 @@ void UMVVMLoadScreen::PlayButtonPressed()
 
 	if (AAuraGameModeBase* AuraGameMode = Cast<AAuraGameModeBase>(UGameplayStatics::GetGameMode(this)))
 	{
+		// 旅行前把选中槽的出生点标签写进 GameInstance，无论新建槽还是已存旧槽 Play 都能拿到正确标签。
+		if (UAuraGameInstance* AuraGameInstance = Cast<UAuraGameInstance>(UGameplayStatics::GetGameInstance(this)))
+		{
+			AuraGameInstance->LoadSlotName = SelectedSlot->GetLoadSlotName();
+			AuraGameInstance->LoadSlotIndex = SelectedSlot->GetSlotIndex();
+			AuraGameInstance->PlayerStartTag = SelectedSlot->GetPlayerStartTag();
+		}
 		AuraGameMode->TravelToMap(SelectedSlot);
 	}
 }

@@ -34,7 +34,20 @@ void AAuraPlayerState::SetXP(const int32 InXP)
 void AAuraPlayerState::SetLevel(const int32 InLevel)
 {
 	Level = InLevel;
-	OnLevelChangedDelegate.Broadcast(Level);
+	// SetLevel 用于读档同步，只刷新 UI，不播放升级表现。
+	OnLevelChangedDelegate.Broadcast(Level, false);
+}
+
+void AAuraPlayerState::SetAttributePoints(const int32 InAttributePoints)
+{
+	AttributePoints = InAttributePoints;
+	OnAttributePointsChangedDelegate.Broadcast(AttributePoints);
+}
+
+void AAuraPlayerState::SetSpellPoints(const int32 InSpellPoints)
+{
+	SpellPoints = InSpellPoints;
+	OnSpellPointsChangedDelegate.Broadcast(SpellPoints);
 }
 
 void AAuraPlayerState::AddToXP(const int32 InXP)
@@ -46,7 +59,7 @@ void AAuraPlayerState::AddToXP(const int32 InXP)
 void AAuraPlayerState::AddToLevel(const int32 InLevel)
 {
 	Level += InLevel;
-	OnLevelChangedDelegate.Broadcast(Level);
+	OnLevelChangedDelegate.Broadcast(Level, true);
 }
 
 void AAuraPlayerState::AddToAttributePoints(const int32 InAttributePoints)
@@ -79,7 +92,8 @@ void AAuraPlayerState::OnRep_Level(const int32 OldLevel)
 	// Level 变化时可以在这里做一些客户端的表现更新，例如播放升级特效、刷新 UI 等。
 	// 注意：服务器本地修改 Level 不会自动触发 OnRep_Level（需要手动调用或走 ASC 的通知）。
 	
-	OnLevelChangedDelegate.Broadcast(Level);
+	// 课程当前按单机流程处理；客户端复制通知视为正常升级。
+	OnLevelChangedDelegate.Broadcast(Level, true);
 }
 
 void AAuraPlayerState::OnRep_XP(const int32 OldXP)

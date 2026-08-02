@@ -27,7 +27,17 @@ void UMVVMLoadSlot::SetMapName(const FString& InMapName)
 	UE_MVVM_SET_PROPERTY_VALUE(MapName, InMapName);
 }
 
+void UMVVMLoadSlot::SetPlayerLevel(const int32 InPlayerLevel)
+{
+	UE_MVVM_SET_PROPERTY_VALUE(PlayerLevel, InPlayerLevel);
+}
+
 void UMVVMLoadSlot::SetSlotStatus(const ESaveSlotStatus InSlotStatus)
 {
 	SlotStatus = InSlotStatus;
+}
+
+void UMVVMLoadSlot::SetPlayerStartTag(const FName& InPlayerStartTag)
+{
+	PlayerStartTag = InPlayerStartTag;
 }

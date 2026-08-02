@@ -12,6 +12,7 @@
 #include "GameplayEffectTypes.h"
 #include "Engine/Engine.h"
 #include "Game/AuraGameModeBase.h"
+#include "Game/LoadScreenSaveGame.h"
 #include "Interaction/CombatInterface.h"
 #include "Kismet/GameplayStatics.h"
 #include "Player/AuraPlayerState.h"
@@ -112,6 +113,67 @@ void UAuraAbilitySystemLibrary::InitializeDefaultAttributes(const UObject* World
 			ASC->ApplyGameplayEffectSpecToSelf(*VitalAttibutesSpecHandle.Data.Get());
 		}
 		
+	}
+}
+
+void UAuraAbilitySystemLibrary::InitializeDefaultAttributesFromSaveData(
+	const UObject* WorldContextObject, UAbilitySystemComponent* ASC, const ULoadScreenSaveGame* SaveData)
+{
+	if (ASC == nullptr || SaveData == nullptr)
+	{
+		return;
+	}
+
+	AAuraGameModeBase* AuraGameMode = Cast<AAuraGameModeBase>(UGameplayStatics::GetGameMode(WorldContextObject));
+	if (AuraGameMode == nullptr)
+	{
+		return;
+	}
+
+	UCharacterClassInfo* CharacterClassInfo = GetCharacterClassInfo(WorldContextObject);
+	if (CharacterClassInfo == nullptr || CharacterClassInfo->PrimaryAttributesSetByCaller == nullptr)
+	{
+		return;
+	}
+
+	FGameplayEffectContextHandle EffectContext = ASC->MakeEffectContext();
+	EffectContext.AddSourceObject(WorldContextObject);
+
+	const FGameplayEffectSpecHandle PrimaryAttributesSpecHandle =
+		ASC->MakeOutgoingSpec(CharacterClassInfo->PrimaryAttributesSetByCaller, 1.f, EffectContext);
+	if (PrimaryAttributesSpecHandle.IsValid())
+	{
+		const FAuraGameplayTags& GameplayTags = FAuraGameplayTags::Get();
+		UAbilitySystemBlueprintLibrary::AssignTagSetByCallerMagnitude(
+			PrimaryAttributesSpecHandle, GameplayTags.Attributes_Primary_Strength, SaveData->Strength);
+		UAbilitySystemBlueprintLibrary::AssignTagSetByCallerMagnitude(
+			PrimaryAttributesSpecHandle, GameplayTags.Attributes_Primary_Intelligence, SaveData->Intelligence);
+		UAbilitySystemBlueprintLibrary::AssignTagSetByCallerMagnitude(
+			PrimaryAttributesSpecHandle, GameplayTags.Attributes_Primary_Resilience, SaveData->Resilience);
+		UAbilitySystemBlueprintLibrary::AssignTagSetByCallerMagnitude(
+			PrimaryAttributesSpecHandle, GameplayTags.Attributes_Primary_Vigor, SaveData->Vigor);
+
+		ASC->ApplyGameplayEffectSpecToSelf(*PrimaryAttributesSpecHandle.Data.Get());
+	}
+
+	if (CharacterClassInfo->SecondaryAttributesInfinite)
+	{
+		const FGameplayEffectSpecHandle SecondaryAttributesSpecHandle =
+			ASC->MakeOutgoingSpec(CharacterClassInfo->SecondaryAttributesInfinite, 1.f, EffectContext);
+		if (SecondaryAttributesSpecHandle.IsValid())
+		{
+			ASC->ApplyGameplayEffectSpecToSelf(*SecondaryAttributesSpecHandle.Data.Get());
+		}
+	}
+
+	if (CharacterClassInfo->VitalAttribute)
+	{
+		const FGameplayEffectSpecHandle VitalAttributesSpecHandle =
+			ASC->MakeOutgoingSpec(CharacterClassInfo->VitalAttribute, 1.f, EffectContext);
+		if (VitalAttributesSpecHandle.IsValid())
+		{
+			ASC->ApplyGameplayEffectSpecToSelf(*VitalAttributesSpecHandle.Data.Get());
+		}
 	}
 }
 
