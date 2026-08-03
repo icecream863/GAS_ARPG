@@ -19,6 +19,18 @@ AAuraEnemy::AAuraEnemy()
 {
 	BaseWalkSpeed = 250.f;
 	GetMesh()->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
+
+	// 高亮模板值在构造时设置一次即可，悬停时只切换 RenderCustomDepth。
+	if (GetMesh())
+	{
+		GetMesh()->SetCustomDepthStencilValue(CUSTOM_DEPTH_RED);
+		GetMesh()->MarkRenderStateDirty();
+	}
+	if (Weapon)
+	{
+		Weapon->SetCustomDepthStencilValue(CUSTOM_DEPTH_RED);
+		Weapon->MarkRenderStateDirty();
+	}
 	
 	AbilitySystemComponent = CreateDefaultSubobject<UAuraAbilitySystemComponent>(FName("AbilitySystemComponent"));
 	AbilitySystemComponent->SetIsReplicated(true);
@@ -169,22 +181,20 @@ void AAuraEnemy::StunTagChanged(const FGameplayTag CallbackTag, int32 NewCount)
 	}
 }
 
-void AAuraEnemy::HighLightActor()
+void AAuraEnemy::HighLightActor_Implementation()
 {
 	if (GetMesh())
 	{
 		GetMesh()->SetRenderCustomDepth(true);
-		GetMesh()->SetCustomDepthStencilValue(CUSTOM_DEPTH_RED);
 	}
-	
+
 	if (Weapon)
 	{
 		Weapon->SetRenderCustomDepth(true);
-		Weapon->SetCustomDepthStencilValue(CUSTOM_DEPTH_RED);
 	}
 }
 
-void AAuraEnemy::UnHighLightActor()
+void AAuraEnemy::UnHighLightActor_Implementation()
 {
 	if (GetMesh())
 	{
@@ -195,6 +205,11 @@ void AAuraEnemy::UnHighLightActor()
 	{
 		Weapon->SetRenderCustomDepth(false);
 	}
+}
+
+void AAuraEnemy::SetMoveToLocation_Implementation(FVector& OutDestination)
+{
+	// 敌人不希望覆盖点击移动目的地：明确留空。
 }
 
 int32 AAuraEnemy::GetPlayerLevel_Implementation()

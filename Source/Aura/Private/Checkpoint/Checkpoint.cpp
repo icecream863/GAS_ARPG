@@ -1,5 +1,6 @@
 #include "Checkpoint/Checkpoint.h"
 
+#include "Components/SceneComponent.h"
 #include "Components/SphereComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Game/AuraGameModeBase.h"
@@ -25,12 +26,30 @@ ACheckpoint::ACheckpoint(const FObjectInitializer& ObjectInitializer)
 	Sphere->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
 	Sphere->SetCollisionResponseToAllChannels(ECR_Ignore);
 	Sphere->SetCollisionResponseToChannel(ECC_Pawn, ECR_Overlap);
+
+	// 点击检查点时玩家自动奔跑的目标位置；默认在根组件（出生点），可在 BP 视口里移动。
+	MoveToComponent = CreateDefaultSubobject<USceneComponent>(TEXT("MoveToComponent"));
+	MoveToComponent->SetupAttachment(GetRootComponent());
+
+	// 高亮模板值在构造时设置一次（BP 可通过 CustomDepthStencilOverride 覆写颜色）。
+	CheckpointMesh->SetCustomDepthStencilValue(CustomDepthStencilOverride);
+	CheckpointMesh->MarkRenderStateDirty();
 }
 
 void ACheckpoint::BeginPlay()
 {
 	Super::BeginPlay();
-	Sphere->OnComponentBeginOverlap.AddDynamic(this, &ACheckpoint::OnSphereOverlap);
+
+	// 信标等子类可在蓝图里关闭该绑定，改用蓝图自己的 Overlap 事件（只发光不存档）。
+	if (bBindOverlapCallback)
+	{
+		Sphere->OnComponentBeginOverlap.AddDynamic(this, &ACheckpoint::OnSphereOverlap);
+	}
+
+	// 【优化】BP 资产的 CheckpointMesh 碰撞被覆盖成了全通道 Ignore，
+	// 导致光标射线（ECC_Visibility）打不中检查点、无法高亮也无法点击移动。
+	// 这里在运行时强制恢复 Visibility 通道的 Block，其它通道保持蓝图配置不变。
+	CheckpointMesh->SetCollisionResponseToChannel(ECC_Visibility, ECR_Block);
 }
 
 void ACheckpoint::OnSphereOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,
@@ -56,16 +75,26 @@ void ACheckpoint::HandleGlowEffects()
 	// 标记已触发，随世界状态保存；下次进入该地图时根据 bReached 恢复发光状态。
 	bReached = true;
 
-	// 先禁碰撞保证只触发一次。
-	Sphere->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	// 只从基础材质创建一次动态实例；反复触发时复用同一个 MID，
+	// 避免从“已点亮的动态实例”再创建子实例，导致参数继承终值、二次发光看不出变化。
+	if (!CheckpointDynamicMaterial)
+	{
+		CheckpointBaseMaterial = CheckpointMesh->GetMaterial(0);
+		CheckpointDynamicMaterial = UMaterialInstanceDynamic::Create(CheckpointBaseMaterial, this);
+		CheckpointMesh->SetMaterial(0, CheckpointDynamicMaterial);
+	}
 
-	// 用 mesh 当前材质创建动态实例并替换，之后蓝图可对 Glow 参数做动画。
-	UMaterialInstanceDynamic* DynamicMaterialInstance = UMaterialInstanceDynamic::Create(
-		CheckpointMesh->GetMaterial(0), this);
-	CheckpointMesh->SetMaterial(0, DynamicMaterialInstance);
+	// 先把 Glow 参数复位为 0，保证每次触发都能看到“熄灭→发光”的动画反馈。
+	CheckpointDynamicMaterial->SetScalarParameterValue(TEXT("Glow Factor"), 0.f);
+
+	// 信标等“只亮一次”的对象在到达后禁用触发球体；检查点保持可反复触发。
+	if (bDisableSphereOnReach)
+	{
+		Sphere->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	}
 
 	// 交给蓝图处理发光效果（Timeline 渐变等）。
-	CheckpointReached(DynamicMaterialInstance);
+	CheckpointReached(CheckpointDynamicMaterial);
 }
 
 bool ACheckpoint::ShouldLoadTransform_Implementation() const
@@ -78,7 +107,32 @@ void ACheckpoint::LoadActor_Implementation()
 {
 	if (bReached)
 	{
-		// 复用触发逻辑：禁碰撞 + 动态材质发光。
+		// 读档后恢复发光表现；检查点保持可重叠，玩家可随时回来重新存档。
 		HandleGlowEffects();
+	}
+}
+
+void ACheckpoint::SetMoveToLocation_Implementation(FVector& OutDestination)
+{
+	if (MoveToComponent)
+	{
+		OutDestination = MoveToComponent->GetComponentLocation();
+	}
+}
+
+void ACheckpoint::HighLightActor_Implementation()
+{
+	// 课程行为：已到达（bReached）的对象不再高亮（信标点亮后不再显示描边）。
+	if (CheckpointMesh && !bReached)
+	{
+		CheckpointMesh->SetRenderCustomDepth(true);
+	}
+}
+
+void ACheckpoint::UnHighLightActor_Implementation()
+{
+	if (CheckpointMesh)
+	{
+		CheckpointMesh->SetRenderCustomDepth(false);
 	}
 }

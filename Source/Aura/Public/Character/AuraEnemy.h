@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Character/AuraCharacterBase.h"
 #include "Interaction/EnemyInterface.h"
+#include "Interaction/HighlightInterface.h"
 #include "UI/WidgetController/OverlayWidgetController.h"
 #include "AbilitySystem/Data/CharacterClassInfo.h"
 #include "AuraEnemy.generated.h"
@@ -16,7 +17,7 @@ class UWidgetComponent;
  * 
  */
 UCLASS()
-class AURA_API AAuraEnemy : public AAuraCharacterBase, public IEnemyInterface
+class AURA_API AAuraEnemy : public AAuraCharacterBase, public IEnemyInterface, public IHighlightInterface
 {
 	GENERATED_BODY()
 
@@ -27,10 +28,12 @@ public:
 	virtual AActor* GetCombatTarget_Implementation() override;
 	virtual void SetCombatTarget_Implementation(AActor* InCombatTarget) override;
 	
-	/** EnemyInterface */
-	virtual void HighLightActor() override;
-	virtual void UnHighLightActor() override;
-	/** End EnemyInterface */
+	/** HighlightInterface */
+	virtual void HighLightActor_Implementation() override;
+	virtual void UnHighLightActor_Implementation() override;
+	/** 敌人不覆盖点击移动目的地：空实现，明确意图。 */
+	virtual void SetMoveToLocation_Implementation(FVector& OutDestination) override;
+	/** End HighlightInterface */
 	
 	/** CombatInterface */
 	virtual int32 GetPlayerLevel_Implementation() override;

@@ -11,12 +11,19 @@
 
 class UDamageTextComponent;
 class UAuraInputConfig;
-class IEnemyInterface;
 class UInputAction;
 class UInputMappingContext;
 class UAuraAbilitySystemComponent;
 class UNiagaraSystem;
 class USplineComponent;
+
+/** 光标下目标的类型：决定 LMB 按下时是施法还是做其它交互。 */
+enum class ETargetingStatus : uint8
+{
+	TargetingEnemy,     // 高亮且实现 IEnemyInterface：LMB 施法瞄准
+	TargetingNonEnemy,  // 高亮但不是敌人：预留其它交互（如地图出入口）
+	NotTargeting        // 光标下没有可高亮对象
+};
 
 /**
  * 玩家控制器：负责输入映射、光标追踪（敌人高亮/目标选择）、
@@ -64,22 +71,30 @@ private:
 	/** 每帧光标射线检测：检测光标下的Actor，用于敌人高亮和目标选择 */
 	void CursorTrace();
 
+	/** 若 Actor 有效且实现 IHighlightInterface，则调用其高亮事件。 */
+	static void HighlightActor(AActor* InActor);
+
+	/** 若 Actor 有效且实现 IHighlightInterface，则调用其取消高亮事件。 */
+	static void UnHighlightActor(AActor* InActor);
+
 	/** 输入死区，抑制微小输入抖动 */
 	UPROPERTY(EditAnywhere, Category = "Input")
 	float DeadZone = 0.15f;
 
 	// ---------- 光标 / 敌人高亮 ----------
 
-	/** 当前帧光标下的敌人（IEnemyInterface） */
-	IEnemyInterface* ThisActor;
-	/** 上一帧光标下的敌人（IEnemyInterface） */
-	IEnemyInterface* LastActor;
+	/** 当前帧光标下的可高亮 Actor（实现了 IHighlightInterface；否则为 null） */
+	UPROPERTY()
+	TObjectPtr<AActor> ThisActor;
+	/** 上一帧光标下的可高亮 Actor */
+	UPROPERTY()
+	TObjectPtr<AActor> LastActor;
 	/** 最新一次光标射线检测的碰撞结果 */
 	FHitResult CursorHit;
 
 	// ---------- 技能输入（含点击移动） ----------
 	// LMB 只有 Pressed / Released / Held，不通过 Move()，因此点击移动逻辑也在这里处理：
-	//   Pressed → 判定是否选中敌人（bTargeting），停止自动奔跑
+	//   Pressed → 根据光标目标更新 TargetingStatus（敌人/非敌人/无目标），停止自动奔跑
 	//   Held   → 选中敌人或按Shift时转发技能；否则跟随光标直接移动
 	//   Released → 转发技能；短按（<ShortPressThreshold）且非敌人非Shift → 导航寻路 + 自动奔跑
 
@@ -111,8 +126,8 @@ private:
 	float ShortPressThreshold = 0.5f;
 	/** 是否正在沿Spline自动奔跑 */
 	bool bAutoRunning = false;
-	/** 是否选中敌人（Pressed时若光标下有敌人则置true，Held/Released优先释放技能而非移动） */
-	bool bTargeting = false;
+	/** 光标下目标类型（Pressed 时更新，Held/Released 按此决定施法还是移动）。 */
+	ETargetingStatus TargetingStatus = ETargetingStatus::NotTargeting;
 
 	/** 自动奔跑到达终点时判定到达的距离容差 */
 	UPROPERTY(EditDefaultsOnly)

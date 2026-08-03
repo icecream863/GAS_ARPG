@@ -175,12 +175,16 @@ void AAuraCharacter::MulticastLevelUpParticles_Implementation()
 void AAuraCharacter::PossessedBy(AController* NewController)
 {
 	Super::PossessedBy(NewController);
-	
-	// Init Ability Actor Info for Server
+
+	// PossessedBy 是“控制器占有了 Pawn”时由服务器调用的回调。
+	// 本项目切图用的是硬切关卡（OpenLevel）：每次进入新关卡都会销毁旧 Pawn、
+	// 生成新 Pawn 并重新占有，因此这里在每次进图时都会执行一次，是读档的入口。
 	InitAbilityActorInfo();
+
+	// 1. 恢复玩家进度（等级/经验/技能点/属性点/主属性/技能）。
 	LoadProgress();
 
-	// 玩家进度（属性/能力）恢复后，再恢复世界状态（检查点发光等）。
+	// 2. 恢复本关的世界状态（检查点/信标发光等），按当前地图资产名匹配存档。
 	if (AAuraGameModeBase* AuraGameMode = Cast<AAuraGameModeBase>(UGameplayStatics::GetGameMode(this)))
 	{
 		AuraGameMode->LoadWorldState(GetWorld());
@@ -190,8 +194,9 @@ void AAuraCharacter::PossessedBy(AController* NewController)
 void AAuraCharacter::OnRep_PlayerState()
 {
 	Super::OnRep_PlayerState();
-	
-	// Init Ability Actor Info for Client
+
+	// 客户端路径：PlayerState 复制到位后初始化 ASC。
+	// 客户端不执行 PossessedBy，也不读档——进度由服务器同步，这里只补 ASC/ActorInfo。
 	InitAbilityActorInfo();
 }
 

@@ -16,6 +16,7 @@
 #include "Input/AuraEnhancedInputComponent.h"
 
 #include "Interaction/EnemyInterface.h"
+#include "Interaction/HighlightInterface.h"
 #include "UI/Widget/DamageTextComponent.h"
 
 
@@ -106,14 +107,30 @@ void AAuraPlayerController::AutoRun()
 	}
 }
 
-void AAuraPlayerController::CursorTrace()
+void AAuraPlayerController::HighlightActor(AActor* InActor)
+{
+	if (IsValid(InActor) && InActor->Implements<UHighlightInterface>())
 	{
+		IHighlightInterface::Execute_HighLightActor(InActor);
+	}
+}
+
+void AAuraPlayerController::UnHighlightActor(AActor* InActor)
+{
+	if (IsValid(InActor) && InActor->Implements<UHighlightInterface>())
+	{
+		IHighlightInterface::Execute_UnHighLightActor(InActor);
+	}
+}
+
+void AAuraPlayerController::CursorTrace()
+{
 	if (const UAuraAbilitySystemComponent* ASC = GetASC(); ASC && ASC->HasMatchingGameplayTag(FAuraGameplayTags::Get().Player_Block_CursorTrace))
 	{
 		// 技能激活前可能已有敌人处于高亮状态；这里先清除旧表现，
 		// 再跳过后续射线检测，避免施法期间保留过时的鼠标指向反馈。
-		if (LastActor) LastActor->UnHighLightActor();
-		if (ThisActor) ThisActor->UnHighLightActor();
+		UnHighlightActor(LastActor);
+		UnHighlightActor(ThisActor);
 		LastActor = nullptr;
 		ThisActor = nullptr;
 		return;
@@ -123,11 +140,23 @@ void AAuraPlayerController::CursorTrace()
 	if (!CursorHit.bBlockingHit) return ;
 	
 	LastActor = ThisActor;
-	ThisActor = Cast<IEnemyInterface>(CursorHit.GetActor());
-	//每帧执行，实时更新
+	// 只有实现了 IHighlightInterface 的 Actor 才记录为可高亮对象；否则显式置空。
+	if (AActor* HitActor = CursorHit.GetActor();
+		IsValid(HitActor) && HitActor->Implements<UHighlightInterface>())
+	{
+		ThisActor = HitActor;
+	}
+	else
+	{
+		ThisActor = nullptr;
+	}
 	
-	if (LastActor) LastActor->UnHighLightActor();
-	if (ThisActor) ThisActor->HighLightActor();
+	// 每帧执行，实时更新：目标变了才切换高亮状态。
+	if (LastActor != ThisActor)
+	{
+		UnHighlightActor(LastActor);
+		HighlightActor(ThisActor);
+	}
 }
 
 //Pressed更多是\“开始记录状态\”，Held/Released才是\“根据最终意图执行\”。这样才能同时兼容点击移动、按住跟随、以及对目标释放技能这几种行为而不冲突。
@@ -139,7 +168,19 @@ void AAuraPlayerController::AbilityInputTagPressed(FGameplayTag InputTag)
 
 	if (InputTag.MatchesTagExact(FAuraGameplayTags::Get().InputTag_LMB))
 	{
-		bTargeting = ThisActor ? true : false;
+		if (IsValid(ThisActor) && ThisActor->Implements<UEnemyInterface>())
+		{
+			TargetingStatus = ETargetingStatus::TargetingEnemy;
+		}
+		else if (IsValid(ThisActor))
+		{
+			// 高亮但不是敌人（如以后的地图出入口）：不当作施法目标。
+			TargetingStatus = ETargetingStatus::TargetingNonEnemy;
+		}
+		else
+		{
+			TargetingStatus = ETargetingStatus::NotTargeting;
+		}
 		bAutoRunning = false;
 	}
 }
@@ -160,10 +201,18 @@ void AAuraPlayerController::AbilityInputTagReleased( FGameplayTag InputTag)
 	//只要不是点击移动，其他技能的释放都直接通知 GAS 就好，只有点击移动才区分短按长按。
 	if (GetASC())	GetASC()->AbilityInputTagReleased(InputTag);
 	
-	if (!bTargeting && !bShiftKeyDown)
+	if (TargetingStatus != ETargetingStatus::TargetingEnemy && !bShiftKeyDown)
 	{
 		if (FollowTime < ShortPressThreshold)
 		{
+			// 高亮对象（检查点/地图出入口）可先把移动目的地覆盖为指定到达点；
+			// 导航路径必须按覆盖后的目的地计算，否则角色会沿着旧路径一直走。
+			const bool bOverwriteDestination = IsValid(ThisActor) && ThisActor->Implements<UHighlightInterface>();
+			if (bOverwriteDestination)
+			{
+				IHighlightInterface::Execute_SetMoveToLocation(ThisActor, CachedDestination);
+			}
+
 			APawn* ControlledPawn = GetPawn();
 			UNavigationPath* NavPath = ControlledPawn
 				? UNavigationSystemV1::FindPathToLocationSynchronously(GetWorld(), ControlledPawn->GetActorLocation(), CachedDestination)
@@ -183,17 +232,22 @@ void AAuraPlayerController::AbilityInputTagReleased( FGameplayTag InputTag)
 				CachedDestination = NavPath->PathPoints[NavPath->PathPoints.Num() - 1];
 
 				bAutoRunning = true;
-				// 短按点击特效也必须遵守 Pressed 屏蔽；否则引导技能期间虽然输入未生效，
-				// 玩家仍会看到与实际操作不一致的地面点击反馈。
-				if (const UAuraAbilitySystemComponent* ASC = GetASC(); !ASC || !ASC->HasMatchingGameplayTag(FAuraGameplayTags::Get().Player_Block_InputPressed))
+
+				// 只有普通地面点击（目的地未被高亮对象覆盖）才播点击粒子。
+				if (!bOverwriteDestination)
 				{
-					UNiagaraFunctionLibrary::SpawnSystemAtLocation(this, ClickNiagaraSystem, CachedDestination);
+					// 短按点击特效也必须遵守 Pressed 屏蔽；否则引导技能期间
+					// 玩家仍会看到与实际操作不一致的地面点击反馈。
+					if (const UAuraAbilitySystemComponent* ASC = GetASC(); !ASC || !ASC->HasMatchingGameplayTag(FAuraGameplayTags::Get().Player_Block_InputPressed))
+					{
+						UNiagaraFunctionLibrary::SpawnSystemAtLocation(this, ClickNiagaraSystem, CachedDestination);
+					}
 				}
 			}
 
 		}
 		FollowTime = 0.f;
-		bTargeting = false;
+		TargetingStatus = ETargetingStatus::NotTargeting;
 	}
 }
 
@@ -213,7 +267,7 @@ void AAuraPlayerController::AbilityInputTagHeld(FGameplayTag InputTag)
 		return;
 	}
 	
-	if (bTargeting || bShiftKeyDown)
+	if (TargetingStatus == ETargetingStatus::TargetingEnemy || bShiftKeyDown)
 	{
 		if (GetASC())
 		{

@@ -126,6 +126,10 @@ public:
 	UPROPERTY()
 	FString MapName = TEXT("Default Map Name");
 
+	/** 玩家最后保存时所在地图的实际资产名（如 Dungeon）；地图传送时写入。 */
+	UPROPERTY()
+	FString MapAssetName = TEXT("");
+
 	/** 保存该槽位下次进入加载菜单时应该显示的状态。 */
 	UPROPERTY()
 	TEnumAsByte<ESaveSlotStatus> SaveSlotStatus = Vacant;

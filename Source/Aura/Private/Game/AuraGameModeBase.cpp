@@ -180,7 +180,7 @@ void AAuraGameModeBase::SaveInGameProgressData(ULoadScreenSaveGame* SaveObject) 
 	AuraGameInstance->PlayerStartTag = SaveObject->PlayerStartTag;
 }
 
-void AAuraGameModeBase::SaveWorldState(UWorld* World) const
+void AAuraGameModeBase::SaveWorldState(UWorld* World, const FString& DestinationMapAssetName) const
 {
 	if (!World)
 	{
@@ -202,6 +202,20 @@ void AAuraGameModeBase::SaveWorldState(UWorld* World) const
 	if (!SaveGame)
 	{
 		return;
+	}
+
+	// 地图传送时，把“要前往的地图”资产名与显示名写进存档，
+	// 这样加载界面/HUD 能显示正确的地图，并能直接旅行回该地图。
+	if (!DestinationMapAssetName.IsEmpty())
+	{
+		SaveGame->MapAssetName = DestinationMapAssetName;
+		// 反查不到显示名（目标地图未注册进 Maps）时保持原 MapName，
+		// 避免把存档的地图名写成空串导致加载菜单无法进入。
+		const FString ResolvedMapName = GetMapNameFromMapAssetName(DestinationMapAssetName);
+		if (!ResolvedMapName.IsEmpty())
+		{
+			SaveGame->MapName = ResolvedMapName;
+		}
 	}
 
 	// 第一次保存这个地图时，先往 SavedMaps 里补一条空记录。
@@ -254,8 +268,23 @@ void AAuraGameModeBase::SaveWorldState(UWorld* World) const
 		AuraGameInstance->LoadSlotIndex);
 }
 
+FString AAuraGameModeBase::GetMapNameFromMapAssetName(const FString& MapAssetName) const
+{
+	for (const auto& Map : Maps)
+	{
+		if (Map.Value.ToSoftObjectPath().GetAssetName() == MapAssetName)
+		{
+			return Map.Key;
+		}
+	}
+	return FString();
+}
+
 void AAuraGameModeBase::LoadWorldState(UWorld* World) const
 {
+	// 读档恢复“当前地图”的世界状态：遍历本关所有实现了 ISaveInterface 的 Actor，
+	// 只有存档里对应地图（按 MapAssetName 分组）存在且 ActorName 匹配的 Actor，
+	// 才会被反序列化并调用 ISaveInterface::Execute_LoadActor 恢复各自状态。
 	if (!World)
 	{
 		return;
@@ -271,8 +300,7 @@ void AAuraGameModeBase::LoadWorldState(UWorld* World) const
 	}
 
 	// 没有存档文件就没必要继续。
-	if (!UGameplayStatics::DoesSaveGameExist(
-			AuraGameInstance->LoadSlotName, AuraGameInstance->LoadSlotIndex))
+	if (!UGameplayStatics::DoesSaveGameExist(AuraGameInstance->LoadSlotName, AuraGameInstance->LoadSlotIndex))
 	{
 		return;
 	}

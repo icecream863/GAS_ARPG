@@ -22,9 +22,6 @@ class AURA_API IEnemyInterface
 
 	// Add interface functions to this class. This is the class that will be inherited to implement this interface.
 public:
-	virtual void HighLightActor() = 0;
-	virtual void UnHighLightActor() = 0;
-
 	/**
 	 *  BlueprintCallable：该函数可以在蓝图（Blueprint）里被调用（会出现在蓝图节点里）。
 		BlueprintNativeEvent：该函数是“可被蓝图重写的原生事件”。也就是：

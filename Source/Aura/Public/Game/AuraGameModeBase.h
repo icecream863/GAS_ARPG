@@ -41,8 +41,12 @@ public:
 	/**
 	 * 保存当前世界状态：遍历所有实现了 USaveInterface 的 Actor，
 	 * 序列化它们带 SaveGame 说明符的成员变量，按地图资产名写进存档。
+	 * DestinationMapAssetName 非空时（地图传送），把目标地图资产名与显示名一并写入存档。
 	 */
-	void SaveWorldState(UWorld* World) const;
+	void SaveWorldState(UWorld* World, const FString& DestinationMapAssetName = TEXT("")) const;
+
+	/** 根据地图资产名反查 Maps 里的用户可见地图名；找不到返回空串。 */
+	FString GetMapNameFromMapAssetName(const FString& MapAssetName) const;
 
 	/**
 	 * 加载当前世界状态：遍历实现了 USaveInterface 的 Actor，

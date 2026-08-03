@@ -38,7 +38,13 @@ void UMVVMLoadScreen::LoadData()
 
 		ULoadScreenSaveGame* SaveObject = AuraGameMode->GetSaveSlotData(LoadSlot->GetLoadSlotName(), LoadSlot->GetSlotIndex());
 		LoadSlot->SetPlayerName(SaveObject->PlayerName);
-		LoadSlot->SetMapName(SaveObject->MapName);
+		FString MapName = SaveObject->MapName;
+		if (MapName.IsEmpty() && !SaveObject->MapAssetName.IsEmpty())
+		{
+			// 兼容旧存档/异常存档：显示名被写空时，按资产名反查回显示名。
+			MapName = AuraGameMode->GetMapNameFromMapAssetName(SaveObject->MapAssetName);
+		}
+		LoadSlot->SetMapName(MapName);
 		LoadSlot->SetPlayerLevel(SaveObject->PlayerLevel);
 		LoadSlot->SetPlayerStartTag(SaveObject->PlayerStartTag);
 		LoadSlot->SetSlotStatus(SaveObject->SaveSlotStatus);
