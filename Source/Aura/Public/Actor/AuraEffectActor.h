@@ -34,6 +34,10 @@ class AURA_API AAuraEffectActor : public AActor
 public:
 	AAuraEffectActor();
 
+	/** 设置效果 Actor 的等级（掉落物生成时按敌人等级覆盖）。 */
+	UFUNCTION(BlueprintCallable, Category = "Applied Effect")
+	void SetActorLevel(float InLevel) { ActorLevel = InLevel; }
+
 
 protected:
 	
@@ -82,6 +86,7 @@ protected:
 	UPROPERTY()
 	TMap<FActiveGameplayEffectHandle, UAbilitySystemComponent*> ActiveEffectHandles;
 	
-	UPROPERTY(EditAnywhere,BlueprintReadOnly, Category = "Applied Effect")
+	// BlueprintReadWrite：掉落物生成后可由蓝图按敌人等级覆盖。
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Applied Effect")
 	float ActorLevel = 1.f;
 };

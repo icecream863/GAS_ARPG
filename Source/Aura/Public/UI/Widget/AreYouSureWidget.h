@@ -16,9 +16,7 @@ class AURA_API UAreYouSureWidget : public UUserWidget
 	GENERATED_BODY()
 
 public:
-	/** 【优化】保留 Confirm 命名作为兼容入口，避免上一节已完成的蓝图绑定失效。 */
-	UPROPERTY(BlueprintAssignable, Category = "Are You Sure")
-	FOnAreYouSureButtonClicked ConfirmButtonClicked;
+	
 
 	/** 删除按钮点击。课程里会让 LoadScreen 订阅这个事件来真正删除槽位。 */
 	UPROPERTY(BlueprintAssignable, Category = "Are You Sure")
@@ -38,4 +36,31 @@ public:
 	/** 给 WBP_AreYouSure 的 Cancel 按钮 OnClicked 调用。 */
 	UFUNCTION(BlueprintCallable, Category = "Are You Sure")
 	void CancelButtonPressed();
+
+	/**
+	 * 【优化】课程在 WBP_AreYouSure 里新建 CenteredXPosition 纯函数；
+	 * 这里放到 C++（与 LoadScreen 的居中逻辑一致），Overlay 蓝图直接调用即可。
+	 * 返回视口水平中心 X，配合 SetAlignmentInViewport(0.5, 0) 使用。
+	 */
+	UFUNCTION(BlueprintPure, Category = "Are You Sure")
+	float GetCenteredViewportXPosition() const;
+
+	/**
+	 * 【优化】设置弹窗提示文本（LoadScreen 删除确认 / Overlay 退出确认共用同一弹窗，
+	 * 各自实例独立设置，互不影响）。
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Are You Sure")
+	void SetMessageText(const FText& InMessageText);
+
+	/** 设置确认按钮的文字（例如删除确认显示 “Delete”，退出确认显示 “Quit”）。 */
+	UFUNCTION(BlueprintCallable, Category = "Are You Sure")
+	void SetConfirmButtonText(const FText& InButtonText);
+
+	/**
+	 * 以居中的方式显示在视口上（AddToViewport + 水平居中 + 指定 Y）。
+	 * 【优化】LoadScreen 的 C++ 已有同款定位逻辑；这里放到弹窗自身，
+	 * Overlay 蓝图无需再手动 SetPositionInViewport/SetAlignmentInViewport。
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Are You Sure")
+	void ShowAsCenteredConfirmation(float ViewportY = 100.f);
 };

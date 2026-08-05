@@ -7,6 +7,7 @@
 #include "Aura/AuraLogChannels.h"
 #include "Game/AuraGameInstance.h"
 #include "Game/LoadScreenSaveGame.h"
+#include "GameFramework/Character.h"
 #include "GameFramework/PlayerStart.h"
 #include "Interaction/SaveInterface.h"
 #include "Kismet/GameplayStatics.h"
@@ -52,10 +53,27 @@ void AAuraGameModeBase::SaveSlotData(UMVVMLoadSlot* LoadSlot) const
 	LoadScreenSaveGame->SlotIndex = SlotIndex;
 	LoadScreenSaveGame->PlayerName = LoadSlot->GetPlayerName();
 	LoadScreenSaveGame->MapName = LoadSlot->GetMapName();
+	LoadScreenSaveGame->MapAssetName = LoadSlot->GetMapAssetName();
 	LoadScreenSaveGame->PlayerStartTag = LoadSlot->GetPlayerStartTag();
 	LoadScreenSaveGame->SaveSlotStatus = LoadSlot->GetSlotStatus();
 
 	UGameplayStatics::SaveGameToSlot(LoadScreenSaveGame, SlotName, SlotIndex);
+}
+
+void AAuraGameModeBase::PlayerDied(ACharacter* DeadCharacter)
+{
+	// 读取当前 GameInstance 槽位的存档；没有存档（未从加载菜单进入）时不做任何事。
+	ULoadScreenSaveGame* SaveGame = RetrieveInGameSaveData();
+	if (!SaveGame)
+	{
+		return;
+	}
+
+	if (DeadCharacter)
+	{
+		// 回到存档里记录的地图（检查点存档/新建槽都会写入地图资产名）。
+		UGameplayStatics::OpenLevel(DeadCharacter, FName(SaveGame->MapAssetName));
+	}
 }
 
 void AAuraGameModeBase::DeleteSlot(const FString& SlotName, const int32 SlotIndex) const

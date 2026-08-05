@@ -3,6 +3,7 @@
 #include "Game/AuraGameInstance.h"
 #include "Game/AuraGameModeBase.h"
 #include "Game/LoadScreenSaveGame.h"
+#include "Engine/Engine.h"
 #include "Kismet/GameplayStatics.h"
 #include "UI/ViewModel/MVVMLoadSlot.h"
 
@@ -95,6 +96,14 @@ void UMVVMLoadScreen::NewGameButtonPressed(const int32 Slot)
 
 void UMVVMLoadScreen::NewSlotButtonPressed(const int32 Slot, const FString& EnteredName)
 {
+	// 【课程】客户端（Listen Server 的非主机）拿不到有效 GameMode，禁止创建新槽，
+	// 并提示用户切回单人模式，避免单人存档在多人环境下被误操作。
+	if (!IsValid(Cast<AAuraGameModeBase>(UGameplayStatics::GetGameMode(this))))
+	{
+		GEngine->AddOnScreenDebugMessage(1, 15.f, FColor::Magenta, TEXT("Please switch to single player"));
+		return;
+	}
+
 	UMVVMLoadSlot* LoadSlot = GetLoadSlotViewModelByIndex(Slot);
 	if (!LoadSlot)
 	{
@@ -109,6 +118,8 @@ void UMVVMLoadScreen::NewSlotButtonPressed(const int32 Slot, const FString& Ente
 	if (AAuraGameModeBase* AuraGameMode = Cast<AAuraGameModeBase>(UGameplayStatics::GetGameMode(this)))
 	{
 		LoadSlot->SetMapName(AuraGameMode->GetDefaultMapName());
+		// 新建槽必须同时写入地图资产名，死亡重生才能回到起始地图。
+		LoadSlot->SetMapAssetName(AuraGameMode->GetDefaultMapAssetName());
 		LoadSlot->SetPlayerStartTag(AuraGameMode->DefaultPlayerStartTag);
 		AuraGameMode->SaveSlotData(LoadSlot);
 

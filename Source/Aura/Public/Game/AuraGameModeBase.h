@@ -12,6 +12,8 @@ class ULoadScreenSaveGame;
 class UMVVMLoadSlot;
 class USaveGame;
 class UWorld;
+class ACharacter;
+class ULootTiers;
 /**
  * 
  */
@@ -56,6 +58,12 @@ public:
 
 	FString GetDefaultMapName() const { return DefaultMapName; }
 
+	/** 新游戏默认进入地图的资产名（用于死亡重生/读档旅行）。 */
+	FString GetDefaultMapAssetName() const { return DefaultMap.ToSoftObjectPath().GetAssetName(); }
+
+	/** 玩家死亡后的重生入口：读取当前槽位存档，回到存档记录的地图。 */
+	void PlayerDied(ACharacter* DeadCharacter);
+
 	// 新建角色首次进入默认地图时使用的 PlayerStart 标签；新建槽时写入 GameInstance。
 	UPROPERTY(EditDefaultsOnly, Category = "Load Screen")
 	FName DefaultPlayerStartTag;
@@ -68,6 +76,10 @@ public:
 	
 	UPROPERTY(EditDefaultsOnly, Category = "Ability Info")
 	TObjectPtr<UAbilityInfo> AbilityInfo;
+
+	/** 敌人死亡掉落用的战利品档次数据资产（蓝图里设置）。 */
+	UPROPERTY(EditDefaultsOnly, Category = "Loot Tiers")
+	TObjectPtr<ULootTiers> LootTiers;
 
 protected:
 	virtual void BeginPlay() override;

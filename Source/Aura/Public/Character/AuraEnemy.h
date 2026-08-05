@@ -8,6 +8,7 @@
 #include "Interaction/HighlightInterface.h"
 #include "UI/WidgetController/OverlayWidgetController.h"
 #include "AbilitySystem/Data/CharacterClassInfo.h"
+#include "AbilitySystem/Data/LootTiers.h"
 #include "AuraEnemy.generated.h"
 
 class AAuraAIController;
@@ -38,6 +39,10 @@ public:
 	/** CombatInterface */
 	virtual int32 GetPlayerLevel_Implementation() override;
 	/** End CombatInterface */
+
+	/** 由生成点等系统在 SpawnActorDeferred 后、FinishSpawning 前设置敌人等级。 */
+	UFUNCTION(BlueprintCallable, Category = "Character Class Default")
+	void SetLevel(int32 InLevel) { Level = InLevel; }
 	
 	UPROPERTY(BlueprintAssignable, Category = "GAS|Attributes")
 	FOnAttributeChangedSignature OnHealthChanged;
@@ -51,6 +56,30 @@ public:
 	virtual void StunTagChanged(const FGameplayTag CallbackTag, int32 NewCount) override;
 	
 	virtual void Die(const FVector& DeathImpulse) override;
+
+	/** 敌人死亡时结算并生成掉落物；C++ 提供默认实现，蓝图仍可覆写定制。 */
+	UFUNCTION(BlueprintNativeEvent)
+	void SpawnLoot();
+
+protected:
+	/** 掉落物依次生成的间隔（秒）。 */
+	UPROPERTY(EditAnywhere, Category = "Loot")
+	float LootSpawnInterval = 0.1f;
+
+	/** 掉落物离敌人的最小/最大散布距离（随机）。 */
+	UPROPERTY(EditAnywhere, Category = "Loot")
+	float MinSpawnDistance = 25.f;
+
+	UPROPERTY(EditAnywhere, Category = "Loot")
+	float MaxSpawnDistance = 150.f;
+
+	/** 依次生成一个掉落物；由定时器驱动。 */
+	void SpawnNextLootItem();
+
+	FTimerHandle LootTimer;
+	TArray<FLootItem> LootItems;
+	TArray<FRotator> LootRotations;
+	int32 SpawnLoopCount = 0;
 	
 	UPROPERTY(BlueprintReadOnly, Category = "Combat")
 	bool bHitReact = false;

@@ -26,6 +26,10 @@ public:
 	
 	AAuraCharacterBase();
 	
+	/** 由生成点等系统在 SpawnActorDeferred 后、FinishSpawning 前设置职业。 */
+	UFUNCTION(BlueprintCallable, Category = "Character Class Default")
+	void SetCharacterClass(ECharacterClass InClass) { CharacterClass = InClass; }
+	
 	UPROPERTY(EditAnywhere, Category = "Combat")
 	TArray<FTaggedMontage> AttackMontages;
 	
@@ -160,6 +164,8 @@ protected:
 	/* Minions */
 	int32 MinionCount = 0;
 	
+	/** 是否已死亡；BlueprintReadOnly 让动画蓝图能读取并切换到死亡状态。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Combat")
 	bool bDead = false;
 	
 	UPROPERTY()

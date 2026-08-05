@@ -65,7 +65,12 @@ void ACheckpoint::OnSphereOverlap(UPrimitiveComponent* OverlappedComponent, AAct
 		// 玩家进度（属性/能力）与世界状态（检查点是否已触发）一起落盘。
 		if (AAuraGameModeBase* AuraGameMode = Cast<AAuraGameModeBase>(UGameplayStatics::GetGameMode(this)))
 		{
-			AuraGameMode->SaveWorldState(GetWorld());
+			// 【课程】保存世界状态时同时写入当前地图资产名，
+			// 这样死亡重生/加载界面都能知道玩家所在/要回的地图。
+			UWorld* World = GetWorld();
+			FString MapName = World->GetMapName();
+			MapName.RemoveFromStart(World->StreamingLevelsPrefix);
+			AuraGameMode->SaveWorldState(World, MapName);
 		}
 	}
 }

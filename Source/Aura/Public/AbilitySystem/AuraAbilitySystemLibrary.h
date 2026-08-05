@@ -18,6 +18,7 @@ class UAbilitySystemComponent;
 class UAttributeMenuWidgetController;
 class UOverlayWidgetController;
 class ULoadScreenSaveGame;
+class ULootTiers;
 /**
  * 
  */
@@ -57,6 +58,10 @@ public:
 	
 	UFUNCTION(BlueprintCallable, Category = "AuraAbilitySystemLibrary | Ability Info")
 	static UAbilityInfo* GetAbilityInfo(const UObject* WorldContextObject);
+
+	/** 从 GameMode 读取战利品档次数据资产；客户端无 GameMode 时返回空。 */
+	UFUNCTION(BlueprintPure, Category = "AuraAbilitySystemLibrary | LootTiers", meta = (DefaultToSelf = "WorldContextObject"))
+	static ULootTiers* GetLootTiers(const UObject* WorldContextObject);
 	
 	
 	UFUNCTION(BlueprintPure, Category = "AuraAbilitySystemLibrary | GameplayEffects")	

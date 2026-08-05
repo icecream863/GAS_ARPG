@@ -31,6 +31,9 @@ public:
 	void SetMapName(const FString& InMapName);
 	FString GetMapName() const { return MapName; }
 
+	void SetMapAssetName(const FString& InMapAssetName);
+	FString GetMapAssetName() const { return MapAssetName; }
+
 	void SetPlayerLevel(int32 InPlayerLevel);
 	int32 GetPlayerLevel() const { return PlayerLevel; }
 
@@ -64,6 +67,10 @@ private:
 	/** 当前槽位对应的地图显示名；本节只用于新建槽后立即显示，持久化在下一节实现。 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, FieldNotify, Setter, Getter, Category = "Load Screen", meta = (AllowPrivateAccess = "true"))
 	FString MapName;
+
+	/** 槽位对应的地图资产名（死亡重生/读档时直接旅行回该地图）。 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, FieldNotify, Setter, Getter, Category = "Load Screen", meta = (AllowPrivateAccess = "true"))
+	FString MapAssetName;
 
 	/** Taken 槽位显示的玩家等级；新建槽为 1，读档时从存档对象恢复。 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, FieldNotify, Setter, Getter, Category = "Load Screen", meta = (AllowPrivateAccess = "true"))

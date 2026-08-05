@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Character/AuraCharacterBase.h"
+#include "TimerManager.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "Interaction/PlayerInterface.h"
 #include "AuraCharacter.generated.h"
@@ -48,6 +49,8 @@ public:
 	/* CombatInterface */
 	// 提供给战斗接口的角色等级（通常从 PlayerState 读取）
 	virtual int32 GetPlayerLevel_Implementation() override;
+	// 玩家死亡：先播基类的死亡表现，再延迟调用 GameMode 重生。
+	virtual void Die(const FVector& DeathImpulse) override;
 	/* End CombatInterface */
 	
 	// 角色开局初始化入口
@@ -76,6 +79,13 @@ protected:
 	virtual void InitAbilityActorInfo() override;
 	void LoadProgress();
 	virtual void OnRep_Stunned() override;
+
+	/** 死亡后等待多久再重生；给死亡表现/提示留时间。 */
+	UPROPERTY(EditDefaultsOnly, Category = "Death")
+	float DeathTime = 5.f;
+
+	/** 死亡重生计时器句柄。 */
+	FTimerHandle DeathTimer;
 	
 private:
 	

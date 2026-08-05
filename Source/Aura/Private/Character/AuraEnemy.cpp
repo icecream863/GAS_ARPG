@@ -12,7 +12,13 @@
 #include "BehaviorTree/BehaviorTree.h"
 #include "BehaviorTree/BlackboardComponent.h"
 #include "Components/WidgetComponent.h"
+#include "AbilitySystem/Data/LootTiers.h"
+#include "AbilitySystem/AuraAbilitySystemLibrary.h"
+#include "Actor/AuraEffectActor.h"
+#include "Components/CapsuleComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "TimerManager.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "UI/Widget/AuraUserWidget.h"
 
 AAuraEnemy::AAuraEnemy()
@@ -152,6 +158,9 @@ void AAuraEnemy::HitReactTagChanged(const FGameplayTag CallbackTag, int32 NewCou
 
 void AAuraEnemy::Die(const FVector& DeathImpulse)
 {
+	// 死亡时先在服务端结算掉落，再执行死亡表现。
+	SpawnLoot();
+
 	SetLifeSpan(LifeSpan);
 	/**
 	* 倒计时开始：从调用这一行开始，经历 LifeSpan 秒的时间。
@@ -162,6 +171,78 @@ void AAuraEnemy::Die(const FVector& DeathImpulse)
 		AuraAIController->GetBlackboardComponent()->SetValueAsBool(FName("Dead"), true);
 	}
 	Super::Die(DeathImpulse);
+}
+
+void AAuraEnemy::SpawnLoot_Implementation()
+{
+	// 从 GameMode 读取战利品数据资产；客户端没有 GameMode 时返回空。
+	ULootTiers* LootTiers = UAuraAbilitySystemLibrary::GetLootTiers(this);
+	if (!LootTiers)
+	{
+		return;
+	}
+
+	// 按掉率/最大数量结算本次要掉落的物品（可能含重复项）。
+	LootItems = LootTiers->GetLootItems();
+	if (LootItems.Num() == 0)
+	{
+		return;
+	}
+
+	// 围绕敌人 360 度均匀分布的朝向，掉落物按这些朝向向外散开。
+	LootRotations = UAuraAbilitySystemLibrary::EvenlySpacedRotators(
+		GetActorForwardVector(), FVector::UpVector, 360.f, LootItems.Num());
+
+	SpawnLoopCount = 0;
+
+	// 先立刻生成第一个，之后每 0.1 秒生成一个（与课程蓝图行为一致）。
+	SpawnNextLootItem();
+	
+	GetWorldTimerManager().SetTimer(
+		LootTimer,
+		FTimerDelegate::CreateUObject(this, &AAuraEnemy::SpawnNextLootItem),
+		LootSpawnInterval,
+		true);
+}
+
+void AAuraEnemy::SpawnNextLootItem()
+{
+	if (SpawnLoopCount >= LootItems.Num())
+	{
+		GetWorldTimerManager().ClearTimer(LootTimer);
+		return;
+	}
+
+	const FLootItem& Item = LootItems[SpawnLoopCount];
+	if (!Item.LootClass)
+	{
+		++SpawnLoopCount;
+		return;
+	}
+
+	// 位置 = 敌人位置 + 该朝向的单位向量 × 随机散布距离。
+	FVector SpawnLocation = GetActorLocation()
+		+ LootRotations[SpawnLoopCount].Vector() * FMath::FRandRange(MinSpawnDistance, MaxSpawnDistance);
+	// 【修复】Character 的原点在胶囊体中心（离地约半高），直接继承会掉落物悬浮。
+	// 这里把 Z 降到敌人脚底（地面附近），PickupBase 的 GroundRestingZOffset 再做微调。
+	SpawnLocation.Z = GetActorLocation().Z - GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+	AActor* SpawnedActor = GetWorld()->SpawnActor<AActor>(
+		Item.LootClass, SpawnLocation, LootRotations[SpawnLoopCount], SpawnParams);
+
+	// 配置了等级覆盖时，把掉落物等级设为该敌人等级。
+	if (Item.bLootLevelOverride)
+	{
+		if (AAuraEffectActor* EffectActor = Cast<AAuraEffectActor>(SpawnedActor))
+		{
+			EffectActor->SetActorLevel(Level);
+		}
+	}
+
+	++SpawnLoopCount;
 }
 
 void AAuraEnemy::StunTagChanged(const FGameplayTag CallbackTag, int32 NewCount)

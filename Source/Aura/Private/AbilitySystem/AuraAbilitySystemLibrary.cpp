@@ -7,6 +7,7 @@
 #include "AbilitySystemComponent.h"
 #include "AuraAbilityTypes.h"
 #include "AuraGameplayTags.h"
+#include "AbilitySystem/Data/LootTiers.h"
 #include "CollisionShape.h"
 #include "Engine/OverlapResult.h"
 #include "GameplayEffectTypes.h"
@@ -233,6 +234,17 @@ UAbilityInfo* UAuraAbilitySystemLibrary::GetAbilityInfo(const UObject* WorldCont
 	return AuraGameMode->AbilityInfo; // 存在 GameMode 里，所有玩家共享一个 AbilityInfo 数据表
 }
 
+ULootTiers* UAuraAbilitySystemLibrary::GetLootTiers(const UObject* WorldContextObject)
+{
+	AAuraGameModeBase* AuraGameMode = Cast<AAuraGameModeBase>(UGameplayStatics::GetGameMode(WorldContextObject));
+	if (AuraGameMode == nullptr)
+	{
+		return nullptr;
+	}
+
+	return AuraGameMode->LootTiers;
+}
+
 bool UAuraAbilitySystemLibrary::IsBlockedHit(const FGameplayEffectContextHandle& EffectContextHandle)
 {	
 	/**
@@ -439,8 +451,17 @@ FGameplayEffectContextHandle UAuraAbilitySystemLibrary::ApplyDamageEffect(
 	check(DamageEffectParams.TargetAbilitySystemComponent);
 	check(DamageEffectParams.DamageGameplayEffectClass);
 
-	FGameplayEffectContextHandle EffectContextHandle = DamageEffectParams.SourceAbilitySystemComponent->MakeEffectContext();
+	// 【修复】全局友军过滤：来源与目标同属一个阵营（都是 Player 或都是 Enemy）时不施加伤害。
+	// 防止任何攻击蓝图漏掉 IsNotFriend 检查时，敌人/玩家的范围攻击误伤友军或自己。
 	AActor* SourceAvatarActor = DamageEffectParams.SourceAbilitySystemComponent->GetAvatarActor();
+	AActor* TargetAvatarActor = DamageEffectParams.TargetAbilitySystemComponent->GetAvatarActor();
+	if (SourceAvatarActor && TargetAvatarActor &&
+		!IsNotFriend(SourceAvatarActor, TargetAvatarActor))
+	{
+		return FGameplayEffectContextHandle();
+	}
+
+	FGameplayEffectContextHandle EffectContextHandle = DamageEffectParams.SourceAbilitySystemComponent->MakeEffectContext();
 	EffectContextHandle.AddSourceObject(SourceAvatarActor);
 	SetDeathImpulse(EffectContextHandle, DamageEffectParams.DeathImpulse);
 

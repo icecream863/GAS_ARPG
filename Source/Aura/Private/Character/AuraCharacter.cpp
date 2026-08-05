@@ -411,3 +411,27 @@ int32 AAuraCharacter::GetPlayerLevel_Implementation()
 	return AuraPlayerState->GetPlayerLevel();
 	
 }
+
+void AAuraCharacter::Die(const FVector& DeathImpulse)
+{
+	// 基类处理布娃娃、卸下武器、广播死亡委托等所有死亡表现。
+	Super::Die(DeathImpulse);
+
+	// 相机脱离弹簧臂并保持世界变换，避免死亡后镜头跟随掉落。
+	if (TopDownCameraComponent)
+	{
+		TopDownCameraComponent->DetachFromComponent(FDetachmentTransformRules::KeepWorldTransform);
+	}
+
+	// 延迟几秒后让 GameMode 读取存档，重生到最近检查点或起始地图。
+	FTimerDelegate DeathTimerDelegate;
+	DeathTimerDelegate.BindLambda(
+		[this]()
+		{
+			if (AAuraGameModeBase* AuraGameMode = Cast<AAuraGameModeBase>(UGameplayStatics::GetGameMode(this)))
+			{
+				AuraGameMode->PlayerDied(this);
+			}
+		});
+	GetWorldTimerManager().SetTimer(DeathTimer, DeathTimerDelegate, DeathTime, false);
+}

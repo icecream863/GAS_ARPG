@@ -40,9 +40,18 @@ FOnExternalGameplayModifierDependencyChange* UMMC_MaxMana::GetExternalModifierDe
 	const FGameplayEffectSpec& Spec, UWorld* World) const
 {
 	// PlayerLevel 不在 AttributeSet 里，GAS 不会自动感知它变化；通过外部委托手动触发重算。
+	// 兜底委托：卸载/对象销毁阶段拿不到 SourceObject 时返回它，
+	// 保证引擎的依赖清理（RemoveCustomMagnitudeExternalDependencies）能走完，
+	// 避免 FActiveGameplayEffectsContainer::Uninitialize 的 ensure 失败。
+	static FOnExternalGameplayModifierDependencyChange FallbackDelegate;
+
 	if (ICombatInterface* CombatInterface = Cast<ICombatInterface>(Spec.GetContext().GetSourceObject()))
 	{
-		return CombatInterface->GetExternalGameplayModifierDependencyMulticast();
+		if (FOnExternalGameplayModifierDependencyChange* ExternalDelegate =
+			CombatInterface->GetExternalGameplayModifierDependencyMulticast())
+		{
+			return ExternalDelegate;
+		}
 	}
-	return Super::GetExternalModifierDependencyMulticast(Spec, World);
+	return &FallbackDelegate;
 }
