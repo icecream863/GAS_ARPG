@@ -45,5 +45,3 @@
 - Unreal Engine 5.8
 - Windows
 - Visual Studio 2022 / Rider
-
-项目入口：`Aura.uproject`
