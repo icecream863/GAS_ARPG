@@ -1,5 +1,3 @@
-# Aura
-
 > Unreal Engine 5.8 · C++ · Gameplay Ability System · UMG · MVVM
 
 基于 Unreal Engine 5.8 开发的俯视角 Action RPG 实践项目。  
