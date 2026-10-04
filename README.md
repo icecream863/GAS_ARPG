@@ -1,11 +1,45 @@
-# GAS_ARPG
+# Aura
 
-基于 Unreal Engine 5.8 的个人 ARPG 实践项目，使用 C++ 与蓝图实现战斗、角色成长和存档流程。
+> Unreal Engine 5.8 · C++ · Gameplay Ability System · UMG · MVVM
 
-## 技术要点
+基于 Unreal Engine 5.8 开发的俯视角 Action RPG 实践项目。  
+项目围绕 Gameplay Ability System 搭建技能、属性、伤害与角色成长体系，并进一步实现客户端目标数据预测、UI 数据解耦以及角色 / 世界状态存档。
 
-- **GAS 战斗**：使用 Gameplay Ability、Gameplay Effect 和 Gameplay Tag 管理技能与状态；实现投射物、连锁法术及护甲、抗性、格挡、暴击、Debuff 伤害结算。
-- **敌人与交互**：通过 Enhanced Input 触发技能；敌人使用行为树与黑板控制战斗行为，并支持掉落物。
-- **成长与存档**：支持等级、属性和技能升级、技能装备；通过检查点保存角色进度及地图状态，加载界面使用 UMG 与 MVVM。
+> 🎬 Demo：待补充
 
-项目文件：`Aura.uproject`（UE 5.8）。
+---
+
+## Features
+
+### Gameplay Ability System
+
+使用 GAS 统一管理主动技能、被动技能、属性、状态和技能装备流程。
+
+- 使用 Gameplay Tag 关联输入、技能状态与技能槽位
+- 支持技能解锁、升级、装备、换槽和被动技能激活
+- 通过 AbilitySpec 保存技能等级、状态与输入槽
+- Enhanced Input 与 GAS 输入逻辑解耦
+
+主要代码：
+
+- `Source/Aura/Private/AbilitySystem/AuraAbilitySystemComponent.cpp`
+- `Source/Aura/Private/AbilitySystem/Abilities/`
+
+---
+
+### Client Prediction & Target Data
+
+针对鼠标指向类技能实现自定义 AbilityTask。
+
+本地玩家采集鼠标命中结果后，将 TargetData 提交至服务器，同时客户端继续本地技能逻辑，避免所有表现都等待一次网络往返。
+
+PredictionKey 用于将客户端提交的目标数据与对应的 Ability 激活关联，服务端收到数据后继续权威执行。
+
+```text
+Client
+  └─ Collect TargetData
+       ├─ Continue local predicted logic
+       └─ Send TargetData
+                ↓
+             Server
+                └─ Authoritative ability execution
