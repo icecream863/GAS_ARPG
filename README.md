@@ -40,14 +40,6 @@
 - SaveGame
 - UE Networking
 
-## 代码入口
-
-- `Source/Aura/Private/AbilitySystem/AuraAbilitySystemComponent.cpp`
-- `Source/Aura/Private/AbilitySystem/AbilityTasks/TargetDataUnderMouse.cpp`
-- `Source/Aura/Private/AbilitySystem/ExecCalc/ExecCalc_Damage.cpp`
-- `Source/Aura/Private/UI/WidgetController/`
-- `Source/Aura/Private/Game/AuraGameModeBase.cpp`
-
 ## 环境
 
 - Unreal Engine 5.8
